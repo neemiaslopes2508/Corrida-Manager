@@ -1,0 +1,14 @@
+﻿node_modules/
+dist/
+*.log
+.vite/
+tools/cloudflared*
+
+# MÃ­dia oficial de terceiros: uso privado local, sem redistribuiÃ§Ã£o.
+# O manifest e os arquivos sÃ£o copiados manualmente do FM26 e servidos pelo host.
+
+# Artefatos locais de navegador/Playwright e backups de consolidaÃ§Ã£o.
+.playwright-mcp/
+backups/
+
+data/rooms/

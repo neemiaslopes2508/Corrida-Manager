@@ -1,0 +1,530 @@
+[
+  {
+    "kind": "driver",
+    "id": "driver_lando_norris",
+    "name": "Lando Norris",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:ff8000/common/f1/2026/mclaren/lannor01/2026mclarenlannor01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_lando_norris.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 243042
+  },
+  {
+    "kind": "driver",
+    "id": "driver_oscar_piastri",
+    "name": "Oscar Piastri",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:ff8000/common/f1/2026/mclaren/oscpia01/2026mclarenoscpia01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_oscar_piastri.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 262230
+  },
+  {
+    "kind": "driver",
+    "id": "driver_george_russell",
+    "name": "George Russell",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:27f4d2/common/f1/2026/mercedes/georus01/2026mercedesgeorus01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_george_russell.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 292859
+  },
+  {
+    "kind": "driver",
+    "id": "driver_kimi_antonelli",
+    "name": "Kimi Antonelli",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:27f4d2/common/f1/2026/mercedes/andant01/2026mercedesandant01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_kimi_antonelli.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 302466
+  },
+  {
+    "kind": "driver",
+    "id": "driver_max_verstappen",
+    "name": "Max Verstappen",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:3671c6/common/f1/2026/redbullracing/maxver01/2026redbullracingmaxver01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_max_verstappen.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 289546
+  },
+  {
+    "kind": "driver",
+    "id": "driver_isack_hadjar",
+    "name": "Isack Hadjar",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:3671c6/common/f1/2026/redbullracing/isahad01/2026redbullracingisahad01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_isack_hadjar.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 286600
+  },
+  {
+    "kind": "driver",
+    "id": "driver_charles_leclerc",
+    "name": "Charles Leclerc",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:e8002d/common/f1/2026/ferrari/chalec01/2026ferrarichalec01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_charles_leclerc.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 261079
+  },
+  {
+    "kind": "driver",
+    "id": "driver_lewis_hamilton",
+    "name": "Lewis Hamilton",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:e8002d/common/f1/2026/ferrari/lewham01/2026ferrarilewham01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_lewis_hamilton.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 292537
+  },
+  {
+    "kind": "driver",
+    "id": "driver_alexander_albon",
+    "name": "Alexander Albon",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:1868db/common/f1/2026/williams/alealb01/2026williamsalealb01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_alexander_albon.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 274905
+  },
+  {
+    "kind": "driver",
+    "id": "driver_carlos_sainz",
+    "name": "Carlos Sainz",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:1868db/common/f1/2026/williams/carsai01/2026williamscarsai01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_carlos_sainz.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 304570
+  },
+  {
+    "kind": "driver",
+    "id": "driver_liam_lawson",
+    "name": "Liam Lawson",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:6692ff/common/f1/2026/racingbulls/lialaw01/2026racingbullslialaw01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_liam_lawson.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 268143
+  },
+  {
+    "kind": "driver",
+    "id": "driver_arvid_lindblad",
+    "name": "Arvid Lindblad",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:6692ff/common/f1/2026/racingbulls/arvlin01/2026racingbullsarvlin01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_arvid_lindblad.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 249419
+  },
+  {
+    "kind": "driver",
+    "id": "driver_fernando_alonso",
+    "name": "Fernando Alonso",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:229971/common/f1/2026/astonmartin/feralo01/2026astonmartinferalo01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_fernando_alonso.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 324502
+  },
+  {
+    "kind": "driver",
+    "id": "driver_lance_stroll",
+    "name": "Lance Stroll",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:229971/common/f1/2026/astonmartin/lanstr01/2026astonmartinlanstr01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_lance_stroll.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 293877
+  },
+  {
+    "kind": "driver",
+    "id": "driver_esteban_ocon",
+    "name": "Esteban Ocon",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:dee1e2/common/f1/2026/haasf1team/estoco01/2026haasf1teamestoco01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_esteban_ocon.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 288567
+  },
+  {
+    "kind": "driver",
+    "id": "driver_oliver_bearman",
+    "name": "Oliver Bearman",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:dee1e2/common/f1/2026/haasf1team/olibea01/2026haasf1teamolibea01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_oliver_bearman.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 263321
+  },
+  {
+    "kind": "driver",
+    "id": "driver_nico_hulkenberg",
+    "name": "Nico Hülkenberg",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:ff2d00/common/f1/2026/audi/nichul01/2026audinichul01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_nico_hulkenberg.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 296941
+  },
+  {
+    "kind": "driver",
+    "id": "driver_gabriel_bortoleto",
+    "name": "Gabriel Bortoleto",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:ff2d00/common/f1/2026/audi/gabbor01/2026audigabbor01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_gabriel_bortoleto.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 294914
+  },
+  {
+    "kind": "driver",
+    "id": "driver_pierre_gasly",
+    "name": "Pierre Gasly",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:00a1e8/common/f1/2026/alpine/piegas01/2026alpinepiegas01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_pierre_gasly.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 275663
+  },
+  {
+    "kind": "driver",
+    "id": "driver_franco_colapinto",
+    "name": "Franco Colapinto",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:00a1e8/common/f1/2026/alpine/fracol01/2026alpinefracol01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_franco_colapinto.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 281616
+  },
+  {
+    "kind": "driver",
+    "id": "driver_valtteri_bottas",
+    "name": "Valtteri Bottas",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:aaaaad/common/f1/2026/cadillac/valbot01/2026cadillacvalbot01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_valtteri_bottas.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 296021
+  },
+  {
+    "kind": "driver",
+    "id": "driver_sergio_p_rez",
+    "name": "Sergio Pérez",
+    "sourceUrl": "https://media.formula1.com/image/upload/ar_1:1,c_crop,g_north,w_1000/b_rgb:aaaaad/common/f1/2026/cadillac/serper01/2026cadillacserper01front.png",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective image rights owner; photographer not identified in index",
+    "license": "No reproduction license identified. F1 guidance says still images should not be reproduced without rights-holder consent.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "drivers/driver_sergio_p_rez.png",
+    "contentType": [
+      "image/png"
+    ],
+    "bytes": 322534
+  },
+  {
+    "kind": "team",
+    "id": "team_mclaren",
+    "name": "McLaren",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/mclaren/2026mclarenlogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_mclaren.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 379
+  },
+  {
+    "kind": "team",
+    "id": "team_mercedes",
+    "name": "Mercedes",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/mercedes/2026mercedeslogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_mercedes.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 4031
+  },
+  {
+    "kind": "team",
+    "id": "team_red_bull",
+    "name": "Red Bull Racing",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/redbullracing/2026redbullracinglogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_red_bull.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 39684
+  },
+  {
+    "kind": "team",
+    "id": "team_ferrari",
+    "name": "Ferrari",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/ferrari/2026ferrarilogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_ferrari.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 45727
+  },
+  {
+    "kind": "team",
+    "id": "team_aston_martin",
+    "name": "Aston Martin",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/astonmartin/2026astonmartinlogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_aston_martin.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 10012
+  },
+  {
+    "kind": "team",
+    "id": "team_audi",
+    "name": "Audi",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/audi/2026audilogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_audi.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 4537
+  },
+  {
+    "kind": "team",
+    "id": "team_williams",
+    "name": "Williams",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/williams/2026williamslogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_williams.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 362
+  },
+  {
+    "kind": "team",
+    "id": "team_alpine",
+    "name": "Alpine",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/alpine/2026alpinelogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_alpine.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 536
+  },
+  {
+    "kind": "team",
+    "id": "team_racing_bulls",
+    "name": "Racing Bulls",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/racingbulls/2026racingbullslogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_racing_bulls.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 15027
+  },
+  {
+    "kind": "team",
+    "id": "team_cadillac",
+    "name": "Cadillac",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/cadillac/2026cadillaclogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_cadillac.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 3147
+  },
+  {
+    "kind": "team",
+    "id": "team_haas",
+    "name": "Haas F1 Team",
+    "sourceUrl": "https://media.formula1.com/image/upload/common/f1/2026/haas/2026haaslogo.svg",
+    "source": "Turn1Visuals index linking to media.formula1.com",
+    "rightsHolder": "Formula 1 companies and/or respective team rights holder",
+    "license": "No reproduction license identified. F1 guidelines require express written license for logos.",
+    "localUseAuthorization": "Authorized by FM26 project owner on 2026-10-16 for private local gameplay only; do not redistribute",
+    "downloadedAt": "2026-10-16",
+    "file": "teams/team_haas.svg",
+    "contentType": [
+      "image/svg+xml"
+    ],
+    "bytes": 1513
+  }
+]
