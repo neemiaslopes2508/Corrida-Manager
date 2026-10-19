@@ -5,6 +5,7 @@ import {
   applySessionResult,
   buildQualifyingInput,
   buildRaceConfig,
+  completeQualifyingSession,
   completeSeason,
   constructorStandings,
   continueAfterResults,
@@ -12,8 +13,10 @@ import {
   currentRound,
   driverStandings,
   startDevelopment,
+  startQualifyingSession,
 } from "../src/engine/career";
 import { simulateQualifying } from "../src/engine/qualifying";
+import { simulateQualifyingToEnd } from "../src/engine/qualifyingSession";
 import { advanceRace, applyRaceCommand, buildRaceView, createRaceState, raceToSessionResult, simulateRaceToEnd } from "../src/engine/race";
 
 function raceFor(seed: string, laps = 5) {
@@ -80,7 +83,7 @@ describe("classificação", () => {
     expect(new Set(result.grid).size).toBe(22);
     expect(result.segments).toHaveLength(3);
     expect(result.segments[0].entries).toHaveLength(22);
-    expect(result.segments[1].entries).toHaveLength(15);
+    expect(result.segments[1].entries).toHaveLength(16);
     expect(result.segments[2].entries).toHaveLength(10);
     const q3 = result.segments[2].entries;
     for (let i = 1; i < q3.length; i++) expect(q3[i].time).toBeGreaterThanOrEqual(q3[i - 1].time);
@@ -219,8 +222,9 @@ describe("carreira curta", () => {
     for (let round = 0; round < 3; round++) {
       const circuit = CIRCUITS_2026[round];
       if (circuit.sprint) {
-        const sq = simulateQualifying(buildQualifyingInput(career, "sprintQuali"));
-        currentRound(career).sprintQualifying = sq;
+        const sqSession = startQualifyingSession(career, "sprintQuali");
+        simulateQualifyingToEnd(sqSession);
+        completeQualifyingSession(career, sqSession);
         const sprintConfig = buildRaceConfig(career, "sprint");
         sprintConfig.totalLaps = 5;
         const sprintState = createRaceState(sprintConfig);
@@ -229,10 +233,16 @@ describe("carreira curta", () => {
         expect(sprintResult.entries.slice(0, 8).map((e) => e.points)).toEqual([8, 7, 6, 5, 4, 3, 2, 1]);
         expect(sprintResult.entries[8]?.points ?? 0).toBe(0);
         applySessionResult(career, sprintResult, "sprint");
+        expect(currentRound(career).qualifyingSession).not.toBeNull();
+        const gpSession = currentRound(career).qualifyingSession!;
+        simulateQualifyingToEnd(gpSession);
+        completeQualifyingSession(career, gpSession);
         expect(currentRound(career).qualifying?.grid).toHaveLength(22);
       } else {
-        const q = simulateQualifying(buildQualifyingInput(career, "quali"));
-        currentRound(career).qualifying = q;
+        const qSession = startQualifyingSession(career, "quali");
+        simulateQualifyingToEnd(qSession);
+        completeQualifyingSession(career, qSession);
+        expect(currentRound(career).qualifying?.grid).toHaveLength(22);
       }
       const config = buildRaceConfig(career, "race");
       config.totalLaps = 5;

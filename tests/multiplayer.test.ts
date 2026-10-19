@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 import type { ClientMessage, RoomView, ServerMessage } from "../src/net/protocol";
-import type { Career, RaceView } from "../src/engine/types";
+import type { Career, QualifyingView, RaceView } from "../src/engine/types";
 
 const PORT = 8899 + Math.floor(Math.random() * 200);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -16,6 +16,7 @@ class Client {
   ws: WebSocket;
   room: RoomView | null = null;
   career: Career | null = null;
+  quali: QualifyingView | null = null;
   race: RaceView | null = null;
   token: string | null = null;
   errors: string[] = [];
@@ -30,6 +31,8 @@ class Client {
         this.token = msg.token ?? this.token;
       }
       if (msg.type === "career_state") this.career = msg.career;
+      if (msg.type === "qualifying_view") this.quali = msg.view;
+      if (msg.type === "qualifying_finished") this.quali = null;
       if (msg.type === "race_view") this.race = msg.view;
       if (msg.type === "error") this.errors.push(msg.message);
     });
@@ -170,9 +173,41 @@ describe("multiplayer autoritativo", () => {
     await waitUntil(() => [a, b, c2].every((x) => x.career?.phase === "prep"), 5000, "preparação");
     a.send({ type: "career_action", action: { type: "enterPractice" } });
     await waitUntil(() => [a, b, c2].every((x) => x.career?.phase === "practice"), 5000, "treino");
+    const bDriver = b.career!.drivers.find((d) => d.teamId === "team_ferrari")!.driverId;
     a.send({ type: "career_action", action: { type: "finishPractice" } });
-    await waitUntil(() => [a, b, c2].every((x) => x.career?.phase === "qualifying"), 8000, "classificação");
-    expect(a.career!.rounds[0].qualifying?.grid).toHaveLength(22);
+    await waitUntil(() => [a, b, c2].every((x) => x.career?.phase === "qualifying" && !!x.quali), 8000, "classificação");
+    expect(a.career!.rounds[0].qualifying).toBeNull();
+    expect(a.career!.rounds[0].qualifyingSession).not.toBeNull();
+    expect(a.quali!.cars).toHaveLength(22);
+
+    // reconexão durante a classificação recebe o estado ao vivo
+    const c3 = new Client();
+    await c3.open();
+    c3.send({ type: "reconnect", code, token: c2.token! });
+    await waitUntil(() => !!c3.quali && c3.career?.rounds[0].qualifyingSession?.type === "quali", 6000, "reconexão durante a classificação");
+    expect(c3.quali!.cars).toHaveLength(22);
+    c3.close();
+
+    const aDriver = a.career!.drivers.find((d) => d.teamId === "team_mclaren")!.driverId;
+    const cDriver = c2.career!.drivers.find((d) => d.teamId === "team_mercedes")!.driverId;
+    b.send({ type: "qualifying_command", command: { type: "sendOut", driverId: aDriver } });
+    await waitUntil(() => b.errors.some((e) => e.includes("próprios pilotos")), 3000, "bloqueio de comando alheio na classificação");
+    a.send({ type: "qualifying_command", command: { type: "sendOut", driverId: aDriver } });
+    b.send({ type: "qualifying_command", command: { type: "sendOut", driverId: bDriver } });
+    c2.send({ type: "qualifying_command", command: { type: "sendOut", driverId: cDriver } });
+    await waitUntil(() => [a, b, c2].every((x) => [aDriver, bDriver, cDriver].every((id) => x.quali?.cars.find((car) => car.driverId === id)?.status !== "garage")), 5000, "três comandos de classificação sincronizados");
+
+    a.send({ type: "qualifying_control", action: "speed", value: 50 });
+    await sleep(450);
+    const clocks = [a.quali!.clock, b.quali!.clock, c2.quali!.clock];
+    expect(Math.max(...clocks) - Math.min(...clocks)).toBeLessThan(15);
+
+    // Skip é exclusivo do host e conclui a sessão de forma autoritativa.
+    b.send({ type: "qualifying_control", action: "skip" });
+    await waitUntil(() => b.errors.some((e) => e.includes("host")), 3000, "bloqueio de skip pelo não-host");
+    a.send({ type: "qualifying_control", action: "skip" });
+    await waitUntil(() => [a, b, c2].every((x) => x.career?.rounds[0].qualifying?.grid.length === 22), 10000, "grid da classificação");
+    await waitUntil(() => [a, b, c2].every((x) => x.quali === null), 5000, "feed de classificação encerrado");
 
     // cliente não-host não pode controlar a corrida
     b.send({ type: "race_control", action: "pause" });
@@ -187,9 +222,11 @@ describe("multiplayer autoritativo", () => {
     expect(a.race!.playerTeams).toEqual(["team_mclaren"]);
     expect(b.race!.playerTeams).toEqual(["team_ferrari"]);
     expect(c2.race!.playerTeams).toEqual(["team_mercedes"]);
+    expect(a.race!.cars.find((car) => car.driverId === aDriver)?.strategy.planVisible).toBe(true);
+    expect(a.race!.cars.find((car) => car.driverId === bDriver)?.strategy.planVisible).toBe(false);
+    expect(a.race!.cars.find((car) => car.driverId === bDriver)?.strategy.inventory).toBeNull();
 
     // comanda o próprio piloto; o servidor aplica e todos veem
-    const bDriver = b.career!.drivers.find((d) => d.teamId === "team_ferrari")!.driverId;
     a.send({ type: "race_command", command: { type: "pace", driverId: bDriver, value: "attack" } });
     await waitUntil(() => a.errors.some((e) => e.includes("próprios pilotos")), 3000, "bloqueio de comando alheio");
     b.send({ type: "race_command", command: { type: "pace", driverId: bDriver, value: "attack" } });

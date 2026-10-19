@@ -65,6 +65,62 @@ const DRIVER_MEDIA_ALIASES: Record<string, string> = {
 
 export const mediaManifestPath = `${MEDIA_BASE}/manifest.json`;
 
+const COUNTRY_FLAG_CODES: Record<string, string> = {
+  "Austrália": "au",
+  "China": "cn",
+  "Japão": "jp",
+  "Reino Unido": "gb",
+  "Alemanha": "de",
+  "Países Baixos": "nl",
+  "Tailândia": "th",
+  "Mônaco": "mc",
+  "Espanha": "es",
+  "Canadá": "ca",
+  "França": "fr",
+  "México": "mx",
+  "Finlândia": "fi",
+  "Itália": "it",
+  "Nova Zelândia": "nz",
+  "Brasil": "br",
+  "Estados Unidos": "us",
+  "Argentina": "ar",
+};
+
+export function countryFlagPath(country: string): string | null {
+  const code = COUNTRY_FLAG_CODES[country];
+  return code ? `${MEDIA_BASE}/flags/${code}.png` : null;
+}
+
+const CIRCUIT_MEDIA: Record<string, { file: string; author: string; license: string; sourceUrl: string }> = {
+  circuit_melbourne: {
+    file: "circuits/melbourne.jpg",
+    author: "Planet Labs, Inc.",
+    license: "CC BY-SA 4.0",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Melbourne_Grand_Prix_Circuit,_December_24,_2017_SkySat_(cropped).jpg",
+  },
+  circuit_shanghai: {
+    file: "circuits/shanghai.jpg",
+    author: "emperornie",
+    license: "CC BY-SA 2.0",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Alonso_china_2013.jpg",
+  },
+  circuit_suzuka: {
+    file: "circuits/suzuka.jpg",
+    author: "Cineyas",
+    license: "CC BY-SA 4.0",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:RB20_During_the_2024_Japanese_Free_Practice.jpg",
+  },
+};
+
+export function circuitPhotoPath(circuitId: string): string | null {
+  return CIRCUIT_MEDIA[circuitId] ? `${MEDIA_BASE}/${CIRCUIT_MEDIA[circuitId].file}` : null;
+}
+
+export function circuitPhotoCredit(circuitId: string): { author: string; license: string; sourceUrl: string } | null {
+  const entry = CIRCUIT_MEDIA[circuitId];
+  return entry ? { author: entry.author, license: entry.license, sourceUrl: entry.sourceUrl } : null;
+}
+
 export function driverMediaId(driverId: string): string | null {
   const stableId = DRIVER_MEDIA_ALIASES[driverId] ?? driverId;
   return DRIVER_MEDIA_ID_SET.has(stableId) ? stableId : null;

@@ -1,0 +1,25 @@
+{
+  "source": "https://flagcdn.com/",
+  "license": "Flag designs are public domain; PNG renditions provided by Flagcdn/Flagpedia.",
+  "usage": "Local UI flags for the 2026 season. Files are 80px-wide PNGs used only as small UI identifiers.",
+  "countries": {
+    "au": "Austrália",
+    "cn": "China",
+    "jp": "Japão",
+    "gb": "Reino Unido",
+    "de": "Alemanha",
+    "nl": "Países Baixos",
+    "th": "Tailândia",
+    "mc": "Mônaco",
+    "es": "Espanha",
+    "ca": "Canadá",
+    "fr": "França",
+    "mx": "México",
+    "fi": "Finlândia",
+    "it": "Itália",
+    "nz": "Nova Zelândia",
+    "br": "Brasil",
+    "us": "Estados Unidos",
+    "ar": "Argentina"
+  }
+}

@@ -5,10 +5,11 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
-import type { Career, RaceState, SessionResult } from "../src/engine/types";
+import type { Career, QualifyingSessionState, RaceState, SessionResult } from "../src/engine/types";
 import type { ClientMessage, RoomView, ServerMessage } from "../src/net/protocol";
-import { applySessionResult, createCareer, makeRaceForCurrentRound, sessionResultFromRace } from "../src/engine/career";
+import { applySessionResult, completeQualifyingSession, createCareer, makeRaceForCurrentRound, migrateCareer, sessionResultFromRace, startQualifyingSession } from "../src/engine/career";
 import { advanceRace, applyRaceCommand, buildRaceView } from "../src/engine/race";
+import { QUALIFYING_SPEEDS, advanceQualifyingSegment, advanceQualifyingSession, applyQualifyingCommand, buildQualifyingView, setQualifyingTeamAI, simulateQualifyingToEnd } from "../src/engine/qualifyingSession";
 import { dispatchCareerAction } from "../src/engine/actions";
 import { TEAM_BY_ID } from "../src/data/season2026";
 import { loadRoomFiles, saveRoomFile, deleteRoomFile } from "./storage";
@@ -146,7 +147,7 @@ function loadRooms(): void {
       players: Array.isArray(raw.players)
         ? raw.players.map((p: ServerPlayer) => ({ ...p, connected: false, ready: false }))
         : [],
-      career: raw.career ?? null,
+      career: raw.career ? migrateCareer(raw.career) : null,
       race: raw.race ?? null,
       raceKind: raw.raceKind ?? null,
       paused: true,
@@ -156,6 +157,7 @@ function loadRooms(): void {
       updatedAt: raw.updatedAt ?? new Date().toISOString(),
       lastSaved: 0,
     };
+    ensureQualifyingSession(room);
     rooms.set(room.code, room);
   }
   if (rooms.size > 0) console.log(`[salas] ${rooms.size} sala(s) carregada(s) do disco.`);
@@ -199,6 +201,22 @@ function roomView(room: ServerRoom): RoomView {
   };
 }
 
+function activeQualifying(room: ServerRoom): QualifyingSessionState | null {
+  if (!room.career) return null;
+  return room.career.rounds[room.career.roundIndex]?.qualifyingSession ?? null;
+}
+
+function ensureQualifyingSession(room: ServerRoom): void {
+  const career = room.career;
+  if (!career) return;
+  if (career.phase !== "qualifying" && career.phase !== "sprintQuali") return;
+  const round = career.rounds[career.roundIndex];
+  if (!round || round.qualifyingSession) return;
+  const type = career.phase === "sprintQuali" ? "sprintQuali" : "quali";
+  if (type === "sprintQuali" ? round.sprintQualifying : round.qualifying) return;
+  startQualifyingSession(career, type);
+}
+
 function send(ws: WebSocket, message: ServerMessage): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
 }
@@ -224,9 +242,30 @@ function broadcastRoom(room: ServerRoom): void {
   }
 }
 
+function careerForPlayer(career: Career, teamId: string | null): Career {
+  const copy = JSON.parse(JSON.stringify(career)) as Career;
+  const ownTeam = teamId ?? "";
+  for (const round of copy.rounds ?? []) {
+    for (const driver of copy.drivers ?? []) {
+      if (driver.teamId !== ownTeam) {
+        if (round.raceStrategyPlans) delete round.raceStrategyPlans[driver.driverId];
+        if (round.tyreInventory) delete round.tyreInventory[driver.driverId];
+        if (round.strategyPlans) delete round.strategyPlans[driver.driverId];
+      }
+    }
+  }
+  return copy;
+}
+
 function broadcastCareer(room: ServerRoom): void {
   if (!room.career) return;
-  broadcast(room, { type: "career_state", career: room.career });
+  for (const ws of sockets) {
+    const session = sessions.get(ws);
+    if (!session || session.code !== room.code) continue;
+    const player = room.players.find((entry) => entry.id === session.playerId);
+    if (!player) continue;
+    send(ws, { type: "career_state", career: careerForPlayer(room.career, player.teamId) });
+  }
 }
 
 function broadcastRace(room: ServerRoom): void {
@@ -236,10 +275,11 @@ function broadcastRace(room: ServerRoom): void {
     if (!session || session.code !== room.code) continue;
     const player = room.players.find((p) => p.id === session.playerId);
     if (!player) continue;
-    const view = buildRaceView(room.race);
+    const visibleTeams = player.teamId ? [player.teamId] : [];
+    const view = buildRaceView(room.race, visibleTeams);
     send(ws, {
       type: "race_view",
-      view: { ...view, playerTeams: player.teamId ? [player.teamId] : [] },
+      view: { ...view, playerTeams: visibleTeams },
       kind: room.raceKind ?? "race",
       paused: room.paused,
       speed: room.speed,
@@ -248,14 +288,24 @@ function broadcastRace(room: ServerRoom): void {
   }
 }
 
+function broadcastQualifying(room: ServerRoom): void {
+  const session = activeQualifying(room);
+  if (!session) return;
+  const view = buildQualifyingView(session);
+  broadcast(room, { type: "qualifying_view", view, paused: room.paused, speed: room.speed });
+}
+
 function sendAuth(ws: WebSocket, room: ServerRoom, player: ServerPlayer): void {
   sessions.set(ws, { code: room.code, playerId: player.id });
   send(ws, { type: "room_state", room: roomView(room), you: playerView(room, player), token: player.token });
-  if (room.career) send(ws, { type: "career_state", career: room.career });
+  if (room.career) send(ws, { type: "career_state", career: careerForPlayer(room.career, player.teamId) });
+  const quali = activeQualifying(room);
+  if (quali) send(ws, { type: "qualifying_view", view: buildQualifyingView(quali), paused: room.paused, speed: room.speed });
   if (room.race) {
+    const visibleTeams = player.teamId ? [player.teamId] : [];
     send(ws, {
       type: "race_view",
-      view: { ...buildRaceView(room.race), playerTeams: player.teamId ? [player.teamId] : [] },
+      view: { ...buildRaceView(room.race, visibleTeams), playerTeams: visibleTeams },
       kind: room.raceKind ?? "race",
       paused: room.paused,
       speed: room.speed,
@@ -303,6 +353,7 @@ function startCareer(room: ServerRoom): string | null {
 
 function startRace(room: ServerRoom, kind: "race" | "sprint"): string | null {
   if (!room.career) return "Carreira não iniciada.";
+  if (activeQualifying(room)) return "Conclua a classificação antes de iniciar a corrida.";
   if (kind === "sprint" && room.career.phase !== "sprint") return "Fase inválida para Sprint.";
   if (kind === "race" && room.career.phase !== "race") return "Fase inválida para corrida.";
   try {
@@ -334,12 +385,31 @@ function finishServerRace(room: ServerRoom): void {
   room.race = null;
   room.raceKind = null;
   room.paused = false;
+  if (room.career.phase === "qualifying" || room.career.phase === "sprintQuali") {
+    room.speed = 20;
+    room.acc = 0;
+    room.lastTick = Date.now();
+  }
   touch(room);
   persist(room, true);
   broadcast(room, { type: "race_finished", result, kind });
   broadcastCareer(room);
   broadcastRoom(room);
+  broadcastQualifying(room);
   console.log(`[corrida] sala ${room.code}: ${kind} concluído, fase ${room.career.phase}.`);
+}
+
+function finishServerQualifying(room: ServerRoom): void {
+  const session = activeQualifying(room);
+  if (!room.career || !session || session.status !== "finished") return;
+  const result = completeQualifyingSession(room.career, session);
+  room.paused = false;
+  touch(room);
+  persist(room, true);
+  broadcast(room, { type: "qualifying_finished", sessionType: session.type, grid: result.grid });
+  broadcastCareer(room);
+  broadcastRoom(room);
+  console.log(`[classificação] sala ${room.code}: ${session.type} concluída.`);
 }
 
 function hostAction(room: ServerRoom, player: ServerPlayer, action: ClientMessage & { type: "career_action" }): void {
@@ -361,8 +431,15 @@ function hostAction(room: ServerRoom, player: ServerPlayer, action: ClientMessag
     if (err) sendToPlayer(room, player, { type: "error", message: err });
     else broadcastCareer(room);
   } else {
+    if (action.action.type === "finishPractice") {
+      room.paused = false;
+      room.speed = Math.max(room.speed, 20);
+      room.acc = 0;
+      room.lastTick = Date.now();
+    }
     broadcastCareer(room);
     broadcastRoom(room);
+    if (action.action.type === "finishPractice") broadcastQualifying(room);
   }
   if (action.action.type === "save") sendToPlayer(room, player, { type: "saved" });
   persist(room, true);
@@ -529,6 +606,52 @@ function handleMessage(ws: WebSocket, msg: ClientMessage): void {
       hostAction(room, player, msg);
       return;
     }
+    case "qualifying_command": {
+      const session = activeQualifying(room);
+      if (!session) {
+        send(ws, { type: "error", message: "Nenhuma classificação em andamento." });
+        return;
+      }
+      if (room.paused) {
+        send(ws, { type: "error", message: "A classificação está pausada." });
+        return;
+      }
+      const res = applyQualifyingCommand(session, msg.command, player.teamId);
+      if (!res.ok) send(ws, { type: "error", message: res.error ?? "Comando rejeitado." });
+      else {
+        touch(room);
+        broadcastQualifying(room);
+        persist(room);
+      }
+      return;
+    }
+    case "qualifying_control": {
+      if (room.players[0]?.id !== player.id) {
+        send(ws, { type: "error", message: "Somente o host controla a classificação." });
+        return;
+      }
+      const session = activeQualifying(room);
+      if (!session) return;
+      if (msg.action === "pause") room.paused = true;
+      else if (msg.action === "resume") room.paused = false;
+      else if (msg.action === "speed") {
+        if (msg.value && QUALIFYING_SPEEDS.includes(msg.value)) room.speed = msg.value;
+      } else if (msg.action === "next") {
+        const res = advanceQualifyingSegment(session);
+        if (!res.ok) send(ws, { type: "error", message: res.error ?? "Não é possível avançar." });
+        else broadcastCareer(room);
+      } else if (msg.action === "skip") {
+        simulateQualifyingToEnd(session);
+        finishServerQualifying(room);
+        return;
+      }
+      room.lastTick = Date.now();
+      touch(room);
+      broadcastRoom(room);
+      broadcastQualifying(room);
+      persist(room, true);
+      return;
+    }
     case "race_command": {
       if (!room.race || !room.career) {
         send(ws, { type: "error", message: "Nenhuma corrida em andamento." });
@@ -567,6 +690,8 @@ function handleMessage(ws: WebSocket, msg: ClientMessage): void {
       if (room.phase === "career" && room.career && player.teamId) {
         const team = room.career.teams.find((t) => t.teamId === player.teamId);
         if (team) team.ai = true;
+        const session = activeQualifying(room);
+        if (session) setQualifyingTeamAI(session, player.teamId, true);
         room.career.playerTeams = room.career.playerTeams.filter((id) => id !== player.teamId);
         if (room.race) room.race.playerTeams = room.race.playerTeams.filter((id) => id !== player.teamId);
         broadcastCareer(room);
@@ -594,7 +719,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname === "/api/health") {
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, version: "1.0.0", time: new Date().toISOString() }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, version: "1.3.3", time: new Date().toISOString() }));
     return;
   }
   if (url.pathname === "/api/rooms") {
@@ -790,25 +915,44 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const room of rooms.values()) {
-    if (!room.race || room.race.status !== "running" || room.paused) continue;
+    if (room.race && room.race.status === "running" && !room.paused) {
+      const dt = Math.min(0.5, Math.max(0, (now - (room.lastTick ?? now)) / 1000));
+      room.lastTick = now;
+      room.acc += dt * room.speed;
+      let guard = 0;
+      while (room.acc >= 0.25 && guard < 500 && room.race.status === "running") {
+        advanceRace(room.race);
+        room.acc -= 0.25;
+        guard++;
+      }
+      if ((room.race.status as string) === "finished") finishServerRace(room);
+      else persist(room);
+      continue;
+    }
+    const session = activeQualifying(room);
+    if (session && session.status === "finished") {
+      finishServerQualifying(room);
+      continue;
+    }
+    if (!session || session.status !== "running" || room.paused) continue;
     const dt = Math.min(0.5, Math.max(0, (now - (room.lastTick ?? now)) / 1000));
     room.lastTick = now;
     room.acc += dt * room.speed;
     let guard = 0;
-    while (room.acc >= 0.25 && guard < 500 && room.race.status === "running") {
-      advanceRace(room.race);
+    while (room.acc >= 0.25 && guard < 500 && session.status === "running") {
+      advanceQualifyingSession(session, 0.25);
       room.acc -= 0.25;
       guard++;
     }
-    if ((room.race.status as string) === "finished") finishServerRace(room);
+    if ((session.status as string) === "finished") finishServerQualifying(room);
     else persist(room);
   }
 }, 50);
 
 setInterval(() => {
   for (const room of rooms.values()) {
-    if (!room.race) continue;
-    broadcastRace(room);
+    if (room.race) broadcastRace(room);
+    else if (activeQualifying(room)) broadcastQualifying(room);
   }
 }, 120);
 

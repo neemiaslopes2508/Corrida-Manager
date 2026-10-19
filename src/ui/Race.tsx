@@ -7,6 +7,7 @@ import { formatClock, formatGap, formatLapTime } from "../engine/track";
 import { COMPOUNDS } from "../engine/tyres";
 import { Badge, Button, TyreBadge, delta, money, ordinal } from "./Common";
 import { DriverPortrait } from "./Media";
+import { CountryFlag, WeatherIcon } from "./Visuals";
 import { TrackMap } from "./TrackMap";
 
 export function SoloRaceScreen({
@@ -205,23 +206,28 @@ function RaceScreen({
 }) {
   const myDrivers = useMemo(() => view.cars.filter((c) => view.playerTeams.includes(c.teamId)), [view]);
   const [selected, setSelected] = useState<string | null>(myDrivers[0]?.driverId ?? view.cars[0]?.driverId ?? null);
+  const [showTelemetry, setShowTelemetry] = useState(false);
   const selectedCar = view.cars.find((c) => c.driverId === selected) ?? myDrivers[0] ?? view.cars[0];
   const selectedDriver = selectedCar ? DRIVER_BY_ID[selectedCar.driverId] : undefined;
   const selectedTeam = selectedCar ? TEAM_BY_ID[selectedCar.teamId] : undefined;
   const leader = view.cars[0];
   const trackStatus = view.trackStatus;
   const lastEvents = [...view.events].slice(-40).reverse();
+  const nextWeather = view.weather.forecast.find((phase) => phase.fromLap > view.lap);
 
   return (
     <div className={`race-screen ${kind === "sprint" ? "sprint" : ""}`}>
       <header className="race-header">
         <div className="race-title">
           <span className="kicker">{kind === "sprint" ? "Sprint" : "Corrida"} · Etapa {career.roundIndex + 1}/3</span>
-          <h1>{circuit.bandeira} {circuit.gp}</h1>
+          <h1><CountryFlag country={circuit.pais} className="page-flag" /> {circuit.gp}</h1>
           <div className="race-meta">
             <span>{circuit.nome}</span>
             <span className={`status-pill status-${trackStatus}`}>{statusText(trackStatus)}</span>
-            <span>{describeWeather(view.weather.rain)} · {Math.round(view.weather.rain * 100)}% chuva · pista {view.weather.trackTemp}°C</span>
+            <span><WeatherIcon rain={view.weather.rain} /> {describeWeather(view.weather.rain)} · {Math.round(view.weather.rain * 100)}% chuva · pista {view.weather.trackTemp}°C</span>
+            {nextWeather && (
+              <span>Próxima mudança: V{nextWeather.fromLap} · {describeWeather(nextWeather.rain)}</span>
+            )}
           </div>
         </div>
         <div className="race-scoreboard">
@@ -242,6 +248,9 @@ function RaceScreen({
             ))}
           </div>
           {!canControl && <span className="host-hint">Host controla pausa/velocidade</span>}
+          <Button className="race-bottom-toggle" size="small" variant={showTelemetry ? "success" : "ghost"} onClick={() => setShowTelemetry((value) => !value)}>
+            {showTelemetry ? "Estratégia" : "Telemetria"}
+          </Button>
           {onSimulate && !finished && (
             <Button size="small" variant="subtle" onClick={onSimulate}>Simular fim</Button>
           )}
@@ -251,7 +260,9 @@ function RaceScreen({
 
       {trackStatus !== "green" && !finished && (
         <div className={`track-banner banner-${trackStatus}`}>
-          {trackStatus === "sc" ? "SAFETY CAR — pelotão agrupado, ultrapassagens proibidas" : "VIRTUAL SAFETY CAR — velocidade limitada por delta"}
+          {trackStatus === "sc"
+            ? `SAFETY CAR — ritmo controlado e ultrapassagens proibidas${view.trackStatusUntilLap ? ` · até a volta ${view.trackStatusUntilLap}` : ""}`
+            : `VIRTUAL SAFETY CAR — ritmo reduzido${view.trackStatusUntilLap ? ` · até a volta ${view.trackStatusUntilLap}` : ""}`}
         </div>
       )}
       {finished && (
@@ -332,7 +343,7 @@ function RaceScreen({
         </div>
       </div>
 
-      <div className="race-bottom">
+      <div className={`race-bottom ${showTelemetry ? "show-telemetry" : ""}`}>
         {selectedCar && (
           <div className="telemetry-panel">
             <div className="telemetry-head">
@@ -408,6 +419,32 @@ function StrategyCard({ car, view, onCommand, selected, onSelect }: { car: RaceV
         </div>
         <TyreBadge compound={car.tyre.compound} wear={car.tyre.wear} age={car.tyre.ageLaps} />
       </div>
+      <div className="strategy-plan-mini">
+        <div className="strategy-plan-stints">
+          {car.strategy.plan?.stints.map((stint, index) => (
+            <span key={`${stint.compound}-${index}`} className="strategy-stint-chip" style={{ borderColor: COMPOUNDS[stint.compound].cor }}>
+              {COMPOUNDS[stint.compound].sigla}{stint.laps}
+            </span>
+          ))}
+          {!car.strategy.plan && <span className="muted small">Plano privado</span>}
+        </div>
+        <span className="muted small">
+          {car.strategy.stopsPlanned} parada(s) · janela {car.strategy.windowStart != null ? `V${car.strategy.windowStart}–V${car.strategy.windowEnd}` : "livre"} · pit ~{car.strategy.pitLoss.toFixed(1)}s
+        </span>
+      </div>
+      <div className="strategy-projection">
+        <span>Vida restante: <strong>{car.strategy.projection ? `~${Math.max(0, car.strategy.projection.remainingLaps)} voltas` : "—"}</strong></span>
+        <span>Desgaste no fim: <strong>{car.strategy.projection ? `${Math.round(car.strategy.projection.endWear)}%` : "—"}</strong></span>
+        <span>Jogos: <strong>{car.strategy.inventory ? `${car.strategy.inventory.soft}S ${car.strategy.inventory.medium}M ${car.strategy.inventory.hard}H` : "—"}</strong></span>
+        <span>Undercut 5v: <strong className={car.strategy.undercutProjection >= 0 ? "text-good" : "text-bad"}>{car.strategy.undercutProjection >= 0 ? "+" : ""}{car.strategy.undercutProjection.toFixed(1)}s</strong></span>
+        <span>Overcut 3v: <strong className={car.strategy.overcutProjection >= 0 ? "text-good" : "text-bad"}>{car.strategy.overcutProjection >= 0 ? "+" : ""}{car.strategy.overcutProjection.toFixed(1)}s</strong></span>
+      </div>
+      {car.strategy.recommendation && (
+        <div className={`engineer-advice advice-${car.strategy.recommendation.severity}`}>
+          <span>Engenheiro</span>
+          <strong>{car.strategy.recommendation.message}</strong>
+        </div>
+      )}
       <div className="strategy-row">
         <span>Ritmo</span>
         <div className="segmented">
@@ -445,14 +482,14 @@ function StrategyCard({ car, view, onCommand, selected, onSelect }: { car: RaceV
         </select>
       </div>
       <div className="strategy-pit">
-        <Button size="small" variant="primary" disabled={disabled || car.pit.state !== "none"} onClick={() => onCommand({ type: "pitNow", driverId: car.driverId })}>
+        <Button size="small" variant="primary" disabled={disabled || car.pit.state !== "none"} onClick={() => onCommand({ type: "pitNow", driverId: car.driverId, revision: car.strategy.version })}>
           Box agora
         </Button>
         <input type="number" placeholder={`volta (${Math.min(view.lap + 1, view.totalLaps)})`} value={pitLap} min={view.lap + 1} max={view.totalLaps} onChange={(e) => setPitLap(e.target.value)} disabled={disabled} />
-        <Button size="small" variant="subtle" disabled={disabled || !pitLap} onClick={() => { onCommand({ type: "schedulePit", driverId: car.driverId, lap: Number(pitLap) }); setPitLap(""); }}>
+        <Button size="small" variant="subtle" disabled={disabled || !pitLap} onClick={() => { onCommand({ type: "schedulePit", driverId: car.driverId, lap: Number(pitLap), revision: car.strategy.version }); setPitLap(""); }}>
           Agendar
         </Button>
-        <Button size="small" variant="ghost" disabled={disabled || (!car.pit.requested && !car.pit.plannedLap)} onClick={() => onCommand({ type: "cancelPit", driverId: car.driverId })}>
+        <Button size="small" variant="ghost" disabled={disabled || (!car.pit.requested && !car.pit.plannedLap)} onClick={() => onCommand({ type: "cancelPit", driverId: car.driverId, revision: car.strategy.version })}>
           Cancelar
         </Button>
       </div>

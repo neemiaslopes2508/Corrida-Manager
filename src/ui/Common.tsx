@@ -3,6 +3,7 @@ import type { Compound, TyreState } from "../engine/types";
 import { COMPOUNDS } from "../engine/tyres";
 import { DRIVER_BY_ID, TEAM_BY_ID } from "../data/season2026";
 import { DriverPortrait, TeamLogo, type MediaSize } from "./Media";
+import { CountryFlag } from "./Visuals";
 
 export function Button({
   children,
@@ -102,6 +103,7 @@ export function DriverLabel({
   return (
     <span className="driver-label">
       {portrait && <DriverPortrait driverId={driverId} size={portraitSize} decorative />}
+      <CountryFlag country={d.nacionalidade} className="driver-flag" />
       {team && <TeamDot teamId={d.equipeId} />}
       <span className="driver-code">{d.codigo}</span>
       <span className="driver-full">{d.nome}</span>

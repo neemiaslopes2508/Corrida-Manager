@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CIRCUITS_2026, TEAM_BY_ID } from "./data/season2026";
-import type { Career, CareerSummary, RaceState, RaceView, SessionResult } from "./engine/types";
+import type { Career, CareerSummary, QualifyingSessionState, QualifyingView, RaceState, RaceView, SessionResult } from "./engine/types";
 import type { CareerAction, ClientMessage, PlayerView, RoomSummary, RoomView, ServerMessage } from "./net/protocol";
-import { applySessionResult, createCareer, makeRaceForCurrentRound, phaseLabel, summary } from "./engine/career";
+import { applySessionResult, completeQualifyingSession, createCareer, makeRaceForCurrentRound, migrateCareer, phaseLabel, startQualifyingSession, summary } from "./engine/career";
 import { dispatchCareerAction } from "./engine/actions";
 import { createRaceState } from "./engine/race";
 import { MPClient } from "./net/client";
 import { MenuScreen, TeamSelectScreen } from "./ui/Menu";
 import { MultiplayerHome } from "./ui/Lobby";
 import { Dashboard } from "./ui/Dashboard";
-import { PrepScreen, PracticeScreen, QualifyingScreen, ResultsScreen, SeasonEndScreen } from "./ui/Weekend";
+import { PrepScreen, PracticeScreen, QualifyingResultScreen, ResultsScreen, SeasonEndScreen } from "./ui/Weekend";
 import { SoloRaceScreen, MultiRaceScreen } from "./ui/Race";
+import { MultiQualifyingScreen, SoloQualifyingScreen } from "./ui/Qualifying";
 import { Badge, Button, money } from "./ui/Common";
 import { TeamLogo } from "./ui/Media";
 
@@ -21,6 +22,8 @@ export function App() {
   const [career, setCareer] = useState<Career | null>(null);
   const [mode, setMode] = useState<"solo" | "multi">("solo");
   const [soloRace, setSoloRace] = useState<{ kind: "race" | "sprint"; state: RaceState } | null>(null);
+  const [soloQuali, setSoloQuali] = useState<QualifyingSessionState | null>(null);
+  const [qualiView, setQualiView] = useState<{ view: QualifyingView; paused: boolean; speed: number } | null>(null);
   const [saves, setSaves] = useState<CareerSummary[]>([]);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [toast, setToast] = useState<{ text: string; tone: "info" | "error" | "success" } | null>(null);
@@ -91,11 +94,29 @@ export function App() {
     }
   }
 
+  function saveLiveQuali(c: Career, state: QualifyingSessionState) {
+    try {
+      localStorage.setItem(`cm-quali-${c.id}`, JSON.stringify(state));
+    } catch {
+      // checkpoint é best-effort
+    }
+  }
+
+  function clearLiveQuali(c: Career) {
+    try {
+      localStorage.removeItem(`cm-quali-${c.id}`);
+    } catch {
+      // ignore
+    }
+  }
+
   function createSoloCareer(teamId: string) {
     const c = makeSoloCareer(teamId);
     setCareer(c);
     setMode("solo");
     setSoloRace(null);
+    setSoloQuali(null);
+    setQualiView(null);
     setScreen("career");
     persistCareer(c);
     notify("Carreira criada. Prepare o carro para Melbourne.", "success");
@@ -113,10 +134,30 @@ export function App() {
         notify("Carreira não encontrada.", "error");
         return;
       }
-      const c = JSON.parse(raw) as Career;
+      const c = migrateCareer(JSON.parse(raw) as Career);
       setMode("solo");
       setCareer(c);
       setSoloRace(null);
+      setSoloQuali(null);
+      setQualiView(null);
+      if (c.phase === "qualifying" || c.phase === "sprintQuali") {
+        const round = c.rounds[c.roundIndex];
+        const legacyResult = c.phase === "sprintQuali" ? round.sprintQualifying : round.qualifying;
+        if (!legacyResult) {
+          let session = round.qualifyingSession ?? null;
+          const live = localStorage.getItem(`cm-quali-${c.id}`);
+          if (live) {
+            try {
+              session = JSON.parse(live) as QualifyingSessionState;
+            } catch {
+              // checkpoint inválido; usa o estado da carreira
+            }
+          }
+          if (!session) session = startQualifyingSession(c, c.phase === "sprintQuali" ? "sprintQuali" : "quali");
+          setSoloQuali(session);
+          persistCareer(c);
+        }
+      }
       if (c.phase === "race" || c.phase === "sprint") {
         const kind = c.phase === "sprint" ? "sprint" : "race";
         const live = localStorage.getItem(`cm-live-${c.id}`);
@@ -146,10 +187,17 @@ export function App() {
         notify(res.error ?? "Ação rejeitada.", "error");
         return;
       }
+      if (action.type === "finishPractice") {
+        const session = draft.rounds[draft.roundIndex]?.qualifyingSession ?? null;
+        setSoloQuali(session);
+        setQualiView(null);
+        if (session) saveLiveQuali(draft, session);
+      }
       if (action.type === "enterRace") {
         const state = makeRaceForCurrentRound(draft, action.kind);
         setSoloRace({ kind: action.kind, state });
         saveLive(draft, state);
+        clearLiveQuali(draft);
       }
       draft.updatedAt = new Date().toISOString();
       setCareer(draft);
@@ -175,15 +223,31 @@ export function App() {
     applySessionResult(draft, result, soloRace.kind);
     localStorage.removeItem(`cm-live-${career.id}`);
     setSoloRace(null);
+    const nextQuali = draft.rounds[draft.roundIndex]?.qualifyingSession ?? null;
+    setSoloQuali(nextQuali);
+    if (nextQuali) saveLiveQuali(draft, nextQuali);
     setCareer(draft);
     persistCareer(draft);
-    notify(soloRace.kind === "sprint" ? "Sprint concluído. Classificação liberada." : "Corrida concluída. Resultados e campeonato atualizados.", "success");
+    notify(soloRace.kind === "sprint" ? "Sprint concluído. Classificação interativa liberada." : "Corrida concluída. Resultados e campeonato atualizados.", "success");
+  }
+
+  function finishSoloQualifying(session: QualifyingSessionState) {
+    if (!career) return;
+    const draft = structuredClone(career);
+    completeQualifyingSession(draft, session);
+    clearLiveQuali(draft);
+    setSoloQuali(null);
+    setCareer(draft);
+    persistCareer(draft);
+    notify(session.type === "sprintQuali" ? "Classificação Sprint concluída. Grid do Sprint definido." : "Classificação concluída. Grid definido.", "success");
   }
 
   function exitSoloRace() {
     if (career && soloRace) saveLive(career, soloRace.state);
     setCareer(null);
     setSoloRace(null);
+    setSoloQuali(null);
+    setQualiView(null);
     setScreen("menu");
     void refreshRooms();
   }
@@ -218,6 +282,7 @@ export function App() {
         if (msg.room.phase === "lobby") {
           setCareer(null);
           setRaceView(null);
+          setQualiView(null);
         }
         break;
       }
@@ -227,6 +292,15 @@ export function App() {
         if (msg.career.phase !== "race" && msg.career.phase !== "sprint") {
           setRaceView(null);
         }
+        if (msg.career.phase !== "qualifying" && msg.career.phase !== "sprintQuali") setQualiView(null);
+        break;
+      }
+      case "qualifying_view": {
+        setQualiView({ view: msg.view, paused: msg.paused, speed: msg.speed });
+        break;
+      }
+      case "qualifying_finished": {
+        setQualiView(null);
         break;
       }
       case "race_started": {
@@ -286,6 +360,7 @@ export function App() {
     setYou(null);
     setCareer(null);
     setRaceView(null);
+    setQualiView(null);
     clientRef.current?.close();
     clientRef.current = null;
     setConnected(false);
@@ -300,6 +375,7 @@ export function App() {
     setRoom(null);
     setYou(null);
     setRaceView(null);
+    setQualiView(null);
     setConnected(false);
     setScreen("menu");
     void refreshRooms();
@@ -362,8 +438,12 @@ export function App() {
   } else {
     const inRace = career.phase === "race" || career.phase === "sprint";
     const raceKind = career.phase === "sprint" ? "sprint" : "race";
+    const qualifyingRound = career.rounds[career.roundIndex];
+    const legacyQualifyingResult = career.phase === "sprintQuali" ? qualifyingRound?.sprintQualifying : career.phase === "qualifying" ? qualifyingRound?.qualifying : null;
+    const liveQualifying = (career.phase === "qualifying" || career.phase === "sprintQuali") && !legacyQualifyingResult && (mode === "solo" ? !!soloQuali : !!qualiView);
+    const fullScreenSession = inRace || liveQualifying;
     content = (
-      <div className={`career-shell ${inRace ? "race-active" : ""}`}>
+      <div className={`career-shell ${fullScreenSession ? "race-active" : ""}`}>
         <TopBar
           career={career}
           mode={mode}
@@ -373,6 +453,7 @@ export function App() {
             if (mode === "solo") {
               persistCareer(career);
               if (soloRace) saveLive(career, soloRace.state);
+              if (soloQuali) saveLiveQuali(career, soloQuali);
               notify("Carreira salva neste navegador.", "success");
             } else {
               mpSend({ type: "career_action", action: { type: "save" } });
@@ -382,8 +463,10 @@ export function App() {
             if (mode === "solo") {
               if (career) persistCareer(career);
               if (career && soloRace) saveLive(career, soloRace.state);
+              if (career && soloQuali) saveLiveQuali(career, soloQuali);
               setCareer(null);
               setSoloRace(null);
+              setSoloQuali(null);
               setScreen("menu");
               void refreshRooms();
             } else {
@@ -391,7 +474,7 @@ export function App() {
             }
           }}
         />
-        <main className={`career-main ${inRace ? "race-main" : ""}`}>
+        <main className={`career-main ${fullScreenSession ? "race-main" : ""}`}>
           {career.phase === "management" && (
             <Dashboard
               career={career}
@@ -403,9 +486,50 @@ export function App() {
           )}
           {career.phase === "prep" && <PrepScreen career={career} meTeamId={meTeamId} onAction={action} isHost={isHost} />}
           {career.phase === "practice" && <PracticeScreen career={career} meTeamId={meTeamId} onAction={action} isHost={isHost} />}
-          {(career.phase === "sprintQuali" || career.phase === "qualifying") && (
-            <QualifyingScreen career={career} onAction={action} isHost={isHost} />
-          )}
+          {career.phase === "sprintQuali" || career.phase === "qualifying" ? (
+            mode === "solo" ? (
+              soloQuali && !legacyQualifyingResult ? (
+                <SoloQualifyingScreen
+                  key={soloQuali.id}
+                  career={career}
+                  meTeamId={meTeamId}
+                  type={soloQuali.type}
+                  initialState={soloQuali}
+                  onCheckpoint={(state) => {
+                    setSoloQuali(state);
+                    saveLiveQuali(career, state);
+                  }}
+                  onFinish={finishSoloQualifying}
+                  onExit={() => {
+                    if (soloQuali) saveLiveQuali(career, soloQuali);
+                    setCareer(null);
+                    setSoloQuali(null);
+                    setScreen("menu");
+                  }}
+                />
+              ) : legacyQualifyingResult ? (
+                <QualifyingResultScreen career={career} onAction={action} isHost={isHost} />
+              ) : (
+                <div className="waiting-screen"><p>Preparando a classificação...</p></div>
+              )
+            ) : qualiView && !legacyQualifyingResult ? (
+              <MultiQualifyingScreen
+                career={career}
+                meTeamId={meTeamId}
+                view={qualiView.view}
+                paused={qualiView.paused}
+                speed={qualiView.speed}
+                isHost={isHost}
+                onControl={(ctrl) => mpSend({ type: "qualifying_control", ...ctrl })}
+                onCommand={(command) => mpSend({ type: "qualifying_command", command })}
+                onExit={exitMultiCareer}
+              />
+            ) : legacyQualifyingResult ? (
+              <QualifyingResultScreen career={career} onAction={action} isHost={isHost} />
+            ) : (
+              <div className="waiting-screen"><div className="pulse-dot" /><p>Aguardando a classificação do servidor...</p></div>
+            )
+          ) : null}
           {inRace && mode === "solo" && soloRace && (
             <SoloRaceScreen
               key={`${career.id}-${career.roundIndex}-${raceKind}`}
@@ -490,7 +614,7 @@ function TopBar({
         </div>
       </div>
       <div className="topbar-center">
-        <span className="topbar-round">{circuit.bandeira} {circuit.gp}</span>
+        <span className="topbar-round">{circuit.gp}</span>
         <Badge tone="info">{phaseLabel(career.phase)}</Badge>
         <span className="muted small">Etapa {career.roundIndex + 1}/3</span>
       </div>

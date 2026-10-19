@@ -526,5 +526,56 @@
       "image/svg+xml"
     ],
     "bytes": 1513
+  },
+  {
+    "kind": "circuit",
+    "id": "circuit_melbourne",
+    "name": "Albert Park Circuit",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Melbourne_Grand_Prix_Circuit,_December_24,_2017_SkySat_(cropped).jpg",
+    "source": "Wikimedia Commons",
+    "rightsHolder": "Planet Labs, Inc.",
+    "author": "Planet Labs, Inc.",
+    "license": "CC BY-SA 4.0",
+    "localUseAuthorization": "Creative Commons attribution and share-alike; cropped/resized derivative for local gameplay.",
+    "downloadedAt": "2026-10-19",
+    "file": "circuits/melbourne.jpg",
+    "contentType": [
+      "image/jpeg"
+    ],
+    "bytes": 287482
+  },
+  {
+    "kind": "circuit",
+    "id": "circuit_shanghai",
+    "name": "Shanghai International Circuit",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Alonso_china_2013.jpg",
+    "source": "Wikimedia Commons",
+    "rightsHolder": "emperornie",
+    "author": "emperornie",
+    "license": "CC BY-SA 2.0",
+    "localUseAuthorization": "Creative Commons attribution and share-alike; cropped/resized derivative for local gameplay.",
+    "downloadedAt": "2026-10-19",
+    "file": "circuits/shanghai.jpg",
+    "contentType": [
+      "image/jpeg"
+    ],
+    "bytes": 135841
+  },
+  {
+    "kind": "circuit",
+    "id": "circuit_suzuka",
+    "name": "Suzuka International Racing Course",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:RB20_During_the_2024_Japanese_Free_Practice.jpg",
+    "source": "Wikimedia Commons",
+    "rightsHolder": "Cineyas",
+    "author": "Cineyas",
+    "license": "CC BY-SA 4.0",
+    "localUseAuthorization": "Creative Commons attribution and share-alike; cropped/resized derivative for local gameplay.",
+    "downloadedAt": "2026-10-19",
+    "file": "circuits/suzuka.jpg",
+    "contentType": [
+      "image/jpeg"
+    ],
+    "bytes": 133999
   }
 ]

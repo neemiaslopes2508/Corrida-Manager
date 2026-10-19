@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { DRIVER_BY_ID, TEAM_BY_ID } from "../data/season2026";
-import { driverPortraitPath, teamLogoPath } from "../media/season2026";
+import { circuitPhotoCredit, circuitPhotoPath, driverPortraitPath, teamLogoPath } from "../media/season2026";
 
 export type MediaSize = "xs" | "sm" | "md" | "lg" | "xl" | "hero";
 
@@ -80,5 +80,40 @@ export function TeamLogo({
         </span>
       )}
     </span>
+  );
+}
+
+export function CircuitPhoto({
+  circuitId,
+  className = "",
+  showCredit = false,
+}: {
+  circuitId: string;
+  className?: string;
+  showCredit?: boolean;
+}) {
+  const src = circuitPhotoPath(circuitId);
+  const credit = circuitPhotoCredit(circuitId);
+  const [broken, markBroken] = useBrokenImage(src);
+  return (
+    <div className={`circuit-photo ${className}`}>
+      {src && !broken ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={markBroken}
+        />
+      ) : (
+        <span className="circuit-photo-fallback" aria-hidden="true">CIRCUIT</span>
+      )}
+      {showCredit && credit && (
+        <span className="media-credit" title={`${credit.author} · ${credit.license}`}>
+          Foto: {credit.author} · {credit.license}
+        </span>
+      )}
+    </div>
   );
 }

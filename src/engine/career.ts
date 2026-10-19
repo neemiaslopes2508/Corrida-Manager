@@ -17,6 +17,16 @@ import { createRng, hashSeed } from "./rng";
 import { createRaceState, createWeather, defaultSetup, describeWeather, raceToSessionResult } from "./race";
 import type { RaceConfig } from "./types";
 import { simulateQualifying, type QualifyingInput } from "./qualifying";
+import { createQualifyingSession, qualifyingResultFromSession, type QualifyingSessionInput } from "./qualifyingSession";
+import {
+  allocateTyreInventory,
+  buildPlanWithStops,
+  cloneInventory,
+  estimatePitLoss,
+  makeDefaultRacePlan,
+  normalizeRacePlan,
+  validateRacePlan,
+} from "./raceStrategy";
 import type {
   Career,
   CareerPhase,
@@ -29,13 +39,15 @@ import type {
   PracticeProgramResult,
   PracticeState,
   QualifyingResult,
+  QualifyingSessionState,
+  RaceStrategyPlan,
   SessionResult,
   Standing,
   TeamRaceSpec,
   TeamState,
 } from "./types";
 
-export const CAREER_VERSION = 1;
+export const CAREER_VERSION = 3;
 const PRIZE_BY_POSITION = [9.0, 7.5, 6.0, 5.0, 4.0, 3.3, 2.7, 2.2, 1.8, 1.5, 1.2];
 const RACE_TRAVEL_COST = 0.7;
 const CONTRACT_RENEW_COST_FACTOR = 2.4;
@@ -68,6 +80,10 @@ function initialStanding(): Standing {
   return { points: 0, wins: 0, podiums: 0, races: 0, bestFinish: 99, sprintWins: 0 };
 }
 
+function derivedPitCrew(team: TeamState | { reputation: number; car: { confiabilidade: number } }): number {
+  return Math.round(Math.max(50, Math.min(95, 55 + team.reputation * 0.28 + (team.car.confiabilidade - 70) * 0.15)));
+}
+
 function createTeamStates(playerTeams: string[]): TeamState[] {
   return TEAMS_2026.map((team, idx) => {
     const base = team.reputacao;
@@ -87,6 +103,7 @@ function createTeamStates(playerTeams: string[]): TeamState[] {
       sponsorId: sponsor?.id ?? null,
       sponsorBonusPaid: 0,
       staff,
+      pitCrew: Math.round(Math.max(50, Math.min(95, 55 + team.reputacao * 0.28 + (team.carro.confiabilidade - 70) * 0.15))),
       project: null,
       components: { pu: 12 + (idx % 4) * 4, cambio: 8 + (idx % 3) * 3, freios: 10, bateria: 9 },
       objectives: {
@@ -126,17 +143,35 @@ function driverSetup(circuit: CircuitData, ai: boolean, index: number, sprint: b
 function createRoundState(careerSeed: string, roundIndex: number, playerTeams: string[], teams: TeamState[], drivers: CareerDriver[]): CareerRoundState {
   const circuit = CIRCUITS_2026[roundIndex];
   const setups: Record<string, CarSetup> = {};
+  const raceStrategyPlans: Record<string, RaceStrategyPlan> = {};
+  const tyreInventory: Record<string, Record<Compound, number>> = {};
+  const startRain = createWeather(circuit, `${careerSeed}:r${roundIndex + 1}`)[0]?.rain ?? 0;
   for (const d of drivers) {
     const team = teams.find((t) => t.teamId === d.teamId);
-    setups[d.driverId] = driverSetup(circuit, !!team?.ai, hashSeed(d.driverId) % 10, circuit.sprint);
+    const setup = driverSetup(circuit, !!team?.ai, hashSeed(d.driverId) % 10, circuit.sprint);
+    setups[d.driverId] = setup;
+    tyreInventory[d.driverId] = allocateTyreInventory(circuit.sprint);
+    raceStrategyPlans[d.driverId] = makeDefaultRacePlan({
+      driverId: d.driverId,
+      totalLaps: circuit.voltas,
+      circuit,
+      startRain,
+      mandatoryStop: true,
+      startingCompound: setup.startingCompound,
+      source: playerTeams.includes(d.teamId) ? "player" : "ai",
+      strategyRating: team?.staff.estrategista.rating ?? 75,
+    });
   }
   return {
     round: roundIndex + 1,
     practice: null,
     setups,
     strategyPlans: {},
+    raceStrategyPlans,
+    tyreInventory,
     sprintQualifying: null,
     qualifying: null,
+    qualifyingSession: null,
     sprintResult: null,
     raceResult: null,
   };
@@ -270,8 +305,12 @@ export function setSetup(career: Career, driverId: string, patch: Partial<CarSet
     ...current,
     ...patch,
     downforce: Math.max(0, Math.min(1, patch.downforce ?? current.downforce)),
-    fuelLoad: Math.max(0, Math.min(1, patch.fuelLoad ?? current.fuelLoad)),
+    fuelLoad: Math.max(0.92, Math.min(1, patch.fuelLoad ?? current.fuelLoad)),
   };
+  const plan = round.raceStrategyPlans?.[driverId];
+  if (plan && patch.startingCompound) {
+    plan.stints[0] = { ...plan.stints[0], compound: patch.startingCompound };
+  }
   career.updatedAt = new Date().toISOString();
   return { ok: true };
 }
@@ -283,6 +322,26 @@ export function setStrategyPlan(career: Career, driverId: string, lap: number | 
   const circuit = circuitOfRound(career);
   if (lap != null && (lap < 1 || lap > circuit.voltas)) return { ok: false, error: `A volta deve estar entre 1 e ${circuit.voltas}.` };
   currentRound(career).strategyPlans[driverId] = lap;
+  career.updatedAt = new Date().toISOString();
+  return { ok: true };
+}
+
+export function setRaceStrategy(career: Career, driverId: string, plan: RaceStrategyPlan): { ok: boolean; error?: string } {
+  const driver = career.drivers.find((d) => d.driverId === driverId);
+  if (!driver) return { ok: false, error: "Piloto não encontrado." };
+  if (!career.playerTeams.includes(driver.teamId)) return { ok: false, error: "Piloto não pertence à sua equipe." };
+  if (career.phase === "race" || career.phase === "results" || career.phase === "seasonEnd") return { ok: false, error: "O plano não pode ser alterado nesta fase." };
+  const circuit = circuitOfRound(career);
+  const round = currentRound(career);
+  const startRain = createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`)[0]?.rain ?? 0;
+  const dry = startRain < 0.15;
+  const normalized = normalizeRacePlan({ ...plan, driverId, source: "player", version: Math.max(1, Math.round(plan.version || 1)) }, circuit.voltas);
+  const inventory = round.tyreInventory?.[driverId];
+  const validation = validateRacePlan(normalized, circuit.voltas, true, dry, inventory);
+  if (!validation.ok) return validation;
+  round.raceStrategyPlans = round.raceStrategyPlans ?? {};
+  round.raceStrategyPlans[driverId] = normalized;
+  round.strategyPlans[driverId] = null;
   career.updatedAt = new Date().toISOString();
   return { ok: true };
 }
@@ -321,7 +380,7 @@ export function runPractice(career: Career, type: PracticeProgramResult["type"],
       confidenceGain: 30,
       data: [
         `Consumo estimado: ${(1.8 + circuit.abrasividade * 0.15).toFixed(2)} kg/volta`,
-        `Perda de tempo no pit lane: ~${circuit.pitLoss.toFixed(1)}s`,
+        `Perda de tempo no pit lane: ~${estimatePitLoss(circuit, team.pitCrew ?? 70).toFixed(1)}s`,
         `Vento e temperatura: ${describeWeather(createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`)[0]?.rain ?? 0)}`,
       ],
     };
@@ -361,6 +420,41 @@ export function buildQualifyingInput(career: Career, type: "quali" | "sprintQual
   };
 }
 
+export function buildQualifyingSessionInput(career: Career, type: "quali" | "sprintQuali"): QualifyingSessionInput {
+  const circuit = circuitOfRound(career);
+  const round = currentRound(career);
+  const practiceConfidence = round.practice?.confidence ?? 35;
+  const confidence: Record<string, number> = {};
+  for (const driver of career.drivers) {
+    confidence[driver.driverId] = career.playerTeams.includes(driver.teamId) ? practiceConfidence : 82;
+  }
+  return {
+    id: `${career.id}:${career.roundIndex + 1}:${type}:live`,
+    seed: `${career.seed}:live-quali:${career.roundIndex + 1}:${type}`,
+    circuit,
+    type,
+    round: career.roundIndex + 1,
+    drivers: career.drivers.map(toDriverSpec),
+    teams: career.teams.map(toTeamSpec),
+    setups: round.setups,
+    playerTeams: [...career.playerTeams],
+    confidence,
+    tyreInventory: round.tyreInventory,
+  };
+}
+
+export function startQualifyingSession(career: Career, type: "quali" | "sprintQuali"): QualifyingSessionState {
+  const round = currentRound(career);
+  if (round.qualifyingSession) return round.qualifyingSession;
+  const session = createQualifyingSession(buildQualifyingSessionInput(career, type));
+  round.qualifyingSession = session;
+  round.qualifying = type === "quali" ? null : round.qualifying;
+  round.sprintQualifying = type === "sprintQuali" ? null : round.sprintQualifying;
+  career.phase = type === "sprintQuali" ? "sprintQuali" : "qualifying";
+  career.updatedAt = new Date().toISOString();
+  return session;
+}
+
 function toDriverSpec(d: CareerDriver): DriverRaceSpec {
   const data = DRIVER_BY_ID[d.driverId];
   return {
@@ -383,33 +477,27 @@ function toTeamSpec(t: TeamState): TeamRaceSpec {
   return {
     teamId: t.teamId,
     car: { ...t.car, confiabilidade: Math.max(35, t.car.confiabilidade - penalty) },
-    pitCrew: t.staff.estrategista.rating,
+    pitCrew: t.pitCrew ?? derivedPitCrew(t),
+    strategist: t.staff.estrategista.rating,
   };
 }
 
 export function finishPracticeAndQualify(career: Career): { ok: boolean; error?: string; result?: QualifyingResult } {
   if (career.phase !== "practice") return { ok: false, error: "Sessão inválida." };
   const circuit = circuitOfRound(career);
-  const round = currentRound(career);
-  if (circuit.sprint) {
-    const result = simulateQualifying(buildQualifyingInput(career, "sprintQuali"));
-    round.sprintQualifying = result;
-    career.phase = "sprintQuali";
-    career.updatedAt = new Date().toISOString();
-    return { ok: true, result };
-  }
-  const result = simulateQualifying(buildQualifyingInput(career, "quali"));
-  round.qualifying = result;
-  career.phase = "qualifying";
-  career.updatedAt = new Date().toISOString();
-  return { ok: true, result };
+  startQualifyingSession(career, circuit.sprint ? "sprintQuali" : "quali");
+  return { ok: true };
 }
 
-export function enterRace(career: Career, kind: "race" | "sprint"): void {
-  if (kind === "sprint" && career.phase !== "sprintQuali") return;
-  if (kind === "race" && career.phase !== "qualifying") return;
+export function enterRace(career: Career, kind: "race" | "sprint"): { ok: boolean; error?: string } {
+  if (kind === "sprint" && career.phase !== "sprintQuali") return { ok: false, error: "Fase inválida." };
+  if (kind === "race" && career.phase !== "qualifying") return { ok: false, error: "Fase inválida." };
+  const round = currentRound(career);
+  const result = kind === "sprint" ? round.sprintQualifying : round.qualifying;
+  if (!result || round.qualifyingSession) return { ok: false, error: "Conclua a classificação antes de iniciar a sessão." };
   career.phase = kind === "sprint" ? "sprint" : "race";
   career.updatedAt = new Date().toISOString();
+  return { ok: true };
 }
 
 export function buildRaceConfig(career: Career, kind: "race" | "sprint"): RaceConfig {
@@ -422,10 +510,32 @@ export function buildRaceConfig(career: Career, kind: "race" | "sprint"): RaceCo
   const finalGrid = (grid && grid.length === career.drivers.length ? grid : fallback).filter((id) => career.drivers.some((d) => d.driverId === id));
   for (const d of career.drivers) if (!finalGrid.includes(d.driverId)) finalGrid.push(d.driverId);
   const weather = createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`);
+  const totalLaps = kind === "sprint" ? circuit.voltasSprint : circuit.voltas;
+  const startRain = weather[0]?.rain ?? 0;
+  const plans: Record<string, RaceStrategyPlan> = {};
+  for (const driver of career.drivers) {
+    const team = career.teams.find((entry) => entry.teamId === driver.teamId);
+    const setup = round.setups[driver.driverId] ?? defaultSetup();
+    const stored = kind === "race" ? round.raceStrategyPlans?.[driver.driverId] : null;
+    const base = stored && stored.stints.reduce((sum, stint) => sum + stint.laps, 0) === totalLaps
+      ? stored
+      : makeDefaultRacePlan({
+          driverId: driver.driverId,
+          totalLaps,
+          circuit,
+          startRain,
+          mandatoryStop: kind === "race",
+          startingCompound: setup.startingCompound,
+          source: career.playerTeams.includes(driver.teamId) ? "player" : "ai",
+          strategyRating: team?.staff.estrategista.rating ?? 75,
+        });
+    plans[driver.driverId] = normalizeRacePlan(base, totalLaps);
+  }
+  const inventory = round.tyreInventory ?? {};
   return {
     seed: `${career.seed}:r${career.roundIndex + 1}:${kind}`,
     circuit,
-    totalLaps: kind === "sprint" ? circuit.voltasSprint : circuit.voltas,
+    totalLaps,
     isSprint: kind === "sprint",
     grid: finalGrid,
     teams: career.teams.map(toTeamSpec),
@@ -435,6 +545,9 @@ export function buildRaceConfig(career: Career, kind: "race" | "sprint"): RaceCo
     mandatoryStop: kind === "race",
     playerTeams: career.playerTeams,
     strategyPlans: kind === "race" ? round.strategyPlans : {},
+    strategyPlansV2: plans,
+    tyreInventory: inventory,
+    initialTrackStatus: startRain > 0.55 ? "sc" : "green",
   };
 }
 
@@ -455,6 +568,52 @@ export function classifyGrid(career: Career, type: "quali" | "sprintQuali"): Qua
   return type === "quali" ? round.qualifying : round.sprintQualifying;
 }
 
+export function completeQualifyingSession(career: Career, session: QualifyingSessionState): QualifyingResult {
+  const result = qualifyingResultFromSession(session);
+  const round = currentRound(career);
+  if (session.type === "sprintQuali") round.sprintQualifying = result;
+  else round.qualifying = result;
+  round.tyreInventory = round.tyreInventory ?? {};
+  for (const car of session.cars) round.tyreInventory[car.driverId] = cloneInventory(car.setsRemaining);
+  round.qualifyingSession = null;
+  career.phase = session.type === "sprintQuali" ? "sprintQuali" : "qualifying";
+  career.updatedAt = new Date().toISOString();
+  career.news.unshift(`${session.type === "sprintQuali" ? "Classificação Sprint" : "Classificação"} concluída. Grid definido.`);
+  return result;
+}
+
+export function migrateCareer(career: Career): Career {
+  if (!career.version || career.version < CAREER_VERSION) career.version = CAREER_VERSION;
+  for (const team of career.teams ?? []) {
+    if (team.pitCrew == null) team.pitCrew = derivedPitCrew(team);
+  }
+  for (const round of career.rounds ?? []) {
+    if (round.qualifyingSession === undefined) round.qualifyingSession = null;
+    const circuit = CIRCUITS_2026[(round.round ?? 1) - 1] ?? CIRCUITS_2026[0];
+    const startRain = createWeather(circuit, `${career.seed}:r${round.round}`)[0]?.rain ?? 0;
+    round.tyreInventory = round.tyreInventory ?? {};
+    round.raceStrategyPlans = round.raceStrategyPlans ?? {};
+    for (const driver of career.drivers ?? []) {
+      if (!round.tyreInventory[driver.driverId]) round.tyreInventory[driver.driverId] = allocateTyreInventory(circuit.sprint);
+      if (!round.raceStrategyPlans[driver.driverId]) {
+        const team = career.teams.find((entry) => entry.teamId === driver.teamId);
+        const setup = round.setups?.[driver.driverId] ?? defaultSetup();
+        round.raceStrategyPlans[driver.driverId] = makeDefaultRacePlan({
+          driverId: driver.driverId,
+          totalLaps: circuit.voltas,
+          circuit,
+          startRain,
+          mandatoryStop: true,
+          startingCompound: setup.startingCompound,
+          source: career.playerTeams.includes(driver.teamId) ? "player" : "ai",
+          strategyRating: team?.staff.estrategista.rating ?? 75,
+        });
+      }
+    }
+  }
+  return career;
+}
+
 function recalcPoints(result: SessionResult, kind: "race" | "sprint"): void {
   const table = kind === "sprint" ? [8, 7, 6, 5, 4, 3, 2, 1] : [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
   result.entries.forEach((entry, i) => {
@@ -473,11 +632,12 @@ export function applySessionResult(career: Career, result: SessionResult, kind: 
   recomputeStandings(career);
 
   if (kind === "sprint") {
-    const quali = simulateQualifying(buildQualifyingInput(career, "quali"));
-    round.qualifying = quali;
-    career.phase = "qualifying";
-    career.news.unshift(`Sprint concluído. Classificação para o GP definida.`);
+    round.qualifying = null;
+    round.qualifyingSession = null;
+    startQualifyingSession(career, "quali");
+    career.news.unshift(`Sprint concluído. Classificação interativa para o GP liberada.`);
   } else {
+    round.qualifyingSession = null;
     career.phase = "results";
   }
   career.updatedAt = new Date().toISOString();

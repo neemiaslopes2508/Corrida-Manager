@@ -1,6 +1,6 @@
-# Corrida Manager — V1 (Fórmula 1 2026)
+# Corrida Manager - V1.3.3 (Fórmula 1 2026)
 
-Manager de Fórmula 1 jogável em português brasileiro. Inclui carreira solo de três etapas (Austrália, China com Sprint e Japão), corrida simulada em tempo real sobre traçados reais, gestão financeira/técnica e multiplayer autoritativo para até três jogadores humanos.
+Manager de Fórmula 1 jogável em português brasileiro. Inclui carreira solo de três etapas (Austrália, China com Sprint e Japão), classificação interativa Q1/Q2/Q3, planejamento de stints, corrida simulada em tempo real sobre traçados reais, gestão financeira/técnica e multiplayer autoritativo para até três jogadores humanos.
 
 ## Requisitos
 
@@ -73,12 +73,12 @@ Variáveis opcionais do servidor:
 2. No dashboard, gerencie pilotos, carro, desenvolvimento, finanças, patrocínios, calendário e campeonato.
 3. **Preparar GP** → ajuste downforce, foco, composto inicial e pit planejado.
 4. **Treino livre** → rode até três programas. Eles revelam a janela de acerto e dados de pneus.
-5. **Classificação** → Q1/Q2/Q3 definem o grid. Na China há Classificação Sprint, Sprint e depois a classificação principal.
+5. **Classificação interativa** → Q1/Q2/Q3 em tempo real, com relógio, múltiplas tentativas, pneus, combustível, tráfego, evolução da pista, mapa e torre de tempos. Na China há Sprint Qualifying (SQ1/SQ2/SQ3), Sprint e depois a classificação principal. O host avança os segmentos. Antes da corrida, cada piloto recebe um plano de stints com compostos, janelas de parada, previsão de desgaste e tempo projetado. Durante a prova, o engenheiro recomenda decisões e a interface mostra vida do pneu, previsão de chuva, undercut/overcut e estoque de pneus. Veja `docs/ESTRATEGIA.md`.
 6. **Corrida** → acompanhe em tempo real, controle os dois carros e ajuste ritmo, energia, pneus e pits. Use 1x–50x, pause ou **Simular fim**.
 7. **Resultados** → pontos, premiação, patrocínio, salários, campeonato e próxima etapa.
 8. Após o Japão, a temporada encerra com campeões de pilotos e construtores.
 
-O progresso solo é salvo automaticamente no `localStorage` do navegador. Um checkpoint da corrida em andamento também é salvo; ao carregar a carreira, a corrida é retomada. Use **Salvar** para gravar manualmente.
+O progresso solo é salvo automaticamente no `localStorage` do navegador. Checkpoints da classificação e da corrida em andamento também são salvos; ao carregar a carreira, a sessão é retomada. Use **Salvar** para gravar manualmente. Detalhes em `docs/CLASSIFICACAO.md`.
 
 ## Multiplayer — 3 jogadores
 
@@ -111,8 +111,8 @@ O Quick Tunnel é temporário: o link muda quando o host é reiniciado. Mantenha
 4. O host cria a sala e compartilha o código de 5 caracteres. Os outros entram com nome + código.
 5. Cada jogador escolhe uma equipe diferente e clica em **Marcar pronto**.
 6. O host clica em **Iniciar carreira**.
-7. O servidor é autoritativo: simulação, tempo, regras, qualificação, corrida e resultados ficam no host. Só o host avança sessões, pausa e altera a velocidade.
-8. Cada cliente recebe apenas os próprios carros no painel de estratégia. Comandos de outros carros são rejeitados pelo servidor.
+7. O servidor é autoritativo: simulação, tempo, regras, classificação, corrida e resultados ficam no host. Só o host avança segmentos de classificação, pausa e altera a velocidade.
+8. Cada cliente recebe apenas os próprios carros nos painéis de estratégia e classificação. Comandos de outros carros são rejeitados pelo servidor.
 9. Se um cliente cair, o token de reconexão fica salvo no navegador. Volte à mesma sala e use **Reconectar**.
 10. Salas e carreiras são persistidas em `data/rooms/*.json`. Se o servidor reiniciar, a sala é recarregada pausada; reconecte e retome.
 
@@ -156,7 +156,7 @@ npm run check:media
 
 O manifest original registra que não há licença de redistribuição identificada e que o uso autorizado é privado/local. Não publique `public/local-media/`, `dist/local-media/` nem um build contendo essas imagens. Direitos, aplicação por tela e limitações em `docs/MEDIA.md`.
 
-Detalhes também em `docs/ASSETS.md` e `docs/REGULAMENTO_E_BALANCEAMENTO.md`.
+As fotos dos circuitos de Melbourne, Xangai e Suzuka são locais, vêm do Wikimedia Commons e têm autor/licença registrados em `docs/MEDIA.md` e no manifest. A V1.3.2 também usa bandeiras locais (Flagcdn) e ícones vetoriais de clima. Detalhes também em `docs/ASSETS.md` e `docs/REGULAMENTO_E_BALANCEAMENTO.md`.
 
 ## Estrutura
 
@@ -204,7 +204,11 @@ npm test
 Cobrem:
 
 - integridade de traçados e tempos de referência;
-- grid de 22 pilotos e segmentos Q1/Q2/Q3;
+- grid de 22 pilotos e segmentos 22 → 16 → 10;
+- classificação interativa com múltiplas tentativas, pneus, combustível, tráfego, chuva, evolução da pista e IA;
+- planejamento de stints, projeções de desgaste, pit loss, undercut/overcut, recomendações do engenheiro e estoque de pneus;
+- IA estratégica com planos, reação a neutralizações e diferenciação por estrategista;
+- Safety Car/VSC com duração por voltas, ritmo progressivo e pit stops durante neutralização;
 - posições únicas, classificação e pontuação;
 - pit stops, troca de compostos e regra de dois compostos;
 - efeito quantitativo de ritmo/gestão de pneus;
@@ -215,7 +219,7 @@ Cobrem:
 - integração multiplayer real com três clientes WebSocket, reconexão, comandos autoritativos, sincronização e conclusão da corrida.
 - rejeição de handshake com origem desconhecida ou sem `Origin`.
 
-Resultado da última execução: **19 testes aprovados** (3 arquivos).
+Resultado da última execução: **33 testes aprovados** (5 arquivos).
 
 ### Validação pública do multiplayer
 

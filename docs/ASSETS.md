@@ -16,6 +16,7 @@ O projeto FM26 original não foi alterado. A inspeção foi seletiva.
 ## Não copiado
 
 - Logos e retratos oficiais: não fazem parte do código-fonte versionado. Há uma cópia privada em `public/local-media/`, fora do Git, para uso local; direitos, escopo e validação estão em `docs/MEDIA.md`.
+- Fotos de circuito da V1.3.1: não vieram do FM26; foram obtidas no Wikimedia Commons, com autor e licença registrados em `docs/MEDIA.md` e no manifest local.
 - SVGs de prévia dos circuitos: a geometria bruta foi usada para gerar um traçado próprio.
 - Código do motor FM26: o projeto anterior usa pista sintética e corridas de teste de 5 voltas. O motor desta V1 foi escrito do zero para pista real, 2026, carreira e multiplayer.
 - Sistema de salvamento SQLite do FM26: substituído por JSON no servidor e `localStorage` no solo.

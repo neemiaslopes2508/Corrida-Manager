@@ -1,12 +1,21 @@
 import React, { useMemo } from "react";
 import type { CircuitData } from "../data/season2026";
 import { TEAM_BY_ID } from "../data/season2026";
-import type { RaceCarView } from "../engine/types";
 import { buildTrack, pitPoseAt, poseAt } from "../engine/track";
+
+export interface TrackMapCar {
+  driverId: string;
+  teamId: string;
+  position: number;
+  distance: number;
+  lane?: number;
+  status: string;
+  pit?: { state: string };
+}
 
 interface Props {
   circuit: CircuitData;
-  cars?: RaceCarView[];
+  cars?: TrackMapCar[];
   selectedDriverId?: string | null;
   onSelect?: (driverId: string) => void;
   compact?: boolean;
@@ -69,7 +78,7 @@ export function TrackMap({ circuit, cars = [], selectedDriverId, onSelect, compa
         )}
         {cars.map((car) => {
           const team = TEAM_BY_ID[car.teamId];
-          const inPit = car.pit.state !== "none";
+          const inPit = car.pit?.state != null && car.pit.state !== "none";
           const laneShift = hashLane(car.driverId) + (car.lane ?? 0) * 2.2;
           const pose = inPit ? pitPoseAt(track, car.distance) : poseAt(track, car.distance, laneShift);
           const x = pose.x;

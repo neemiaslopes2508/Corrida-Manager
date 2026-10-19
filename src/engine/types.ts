@@ -25,7 +25,8 @@ export const DEFAULT_SETUP: CarSetup = {
 export interface TeamRaceSpec {
   teamId: string;
   car: CarAttributes;
-  pitCrew: number; // 0-100
+  pitCrew: number; // 0-100, competência da equipe de pit stop
+  strategist?: number; // 0-100, competência do estrategista/IA
 }
 
 export interface DriverRaceSpec {
@@ -58,7 +59,66 @@ export interface RaceConfig {
   mandatoryStop: boolean;
   playerTeams: string[];
   strategyPlans?: Record<string, number | null>;
+  strategyPlansV2?: Record<string, RaceStrategyPlan>;
+  tyreInventory?: Record<string, Record<Compound, number>>;
   initialTrackStatus?: "green" | "sc";
+}
+
+export interface StrategyStint {
+  compound: Compound;
+  laps: number;
+}
+
+export interface StrategyPitWindow {
+  before: number;
+  after: number;
+}
+
+export interface RaceStrategyPlan {
+  driverId: string;
+  stints: StrategyStint[];
+  pitWindows: StrategyPitWindow[];
+  source: "player" | "ai";
+  version: number;
+}
+
+export interface TyreProjection {
+  compound: Compound;
+  startLap: number;
+  endLap: number;
+  laps: number;
+  endWear: number;
+  remainingLaps: number;
+  averageLapTime: number;
+  warmupLaps: number;
+  risk: number;
+}
+
+export interface RaceStrategyProjection {
+  stints: TyreProjection[];
+  pitLaps: number[];
+  pitLoss: number;
+  totalTime: number;
+  risk: number;
+}
+
+export interface StrategyRecommendation {
+  key: string;
+  lap: number;
+  severity: "info" | "warn" | "danger" | "success";
+  action: "pit" | "extend" | "save" | "push" | "info";
+  message: string;
+}
+
+export interface RaceStrategyState {
+  plan: RaceStrategyPlan;
+  stintIndex: number;
+  plannedPitLap: number | null;
+  windowStart: number | null;
+  windowEnd: number | null;
+  version: number;
+  lastAdviceKey: string | null;
+  lastAdviceLap: number;
 }
 
 export interface TyreState {
@@ -119,9 +179,12 @@ export interface RaceCar {
   lane: number;
   positionGapAhead: number;
   positionGapLeader: number;
-  bestSector: number;
   incidents: number;
-  teamOrder: number;
+  strategy: RaceStrategyState;
+  tyreInventory: Record<Compound, number>;
+  advice: StrategyRecommendation | null;
+  lastAdviceLap: number;
+  lastAdviceKey: string | null;
 }
 
 export interface RaceEvent {
@@ -178,6 +241,7 @@ export interface RaceState {
   status: "running" | "finished";
   trackStatus: TrackStatus;
   trackStatusUntil: number;
+  trackStatusUntilLap: number | null;
   weather: RaceWeather;
   cars: RaceCar[];
   teams: TeamRaceSpec[];
@@ -195,6 +259,23 @@ export interface RaceState {
   scLaps: number;
   lastScLap: number;
   safetyCarDeployed: number;
+}
+
+export interface RaceCarStrategyView {
+  stintIndex: number;
+  plannedPitLap: number | null;
+  windowStart: number | null;
+  windowEnd: number | null;
+  stopsPlanned: number;
+  version: number;
+  planVisible: boolean;
+  plan: RaceStrategyPlan | null;
+  projection: TyreProjection | null;
+  inventory: Record<Compound, number> | null;
+  recommendation: StrategyRecommendation | null;
+  pitLoss: number;
+  undercutProjection: number;
+  overcutProjection: number;
 }
 
 export interface RaceCarView {
@@ -225,6 +306,7 @@ export interface RaceCarView {
   lane: number;
   retiredReason: string | null;
   finishTime: number | null;
+  strategy: RaceCarStrategyView;
 }
 
 export interface RaceView {
@@ -236,12 +318,14 @@ export interface RaceView {
   isSprint: boolean;
   status: "running" | "finished";
   trackStatus: TrackStatus;
+  trackStatusUntilLap: number | null;
   weather: RaceWeather;
   cars: RaceCarView[];
   events: RaceEvent[];
   fastestLap: FastestLap | null;
   playerTeams: string[];
   leaderLap: number;
+  pitLossEstimate: number;
 }
 
 export type RaceCommand =
@@ -249,9 +333,10 @@ export type RaceCommand =
   | { type: "energy"; driverId: string; value: EnergyMode }
   | { type: "tyreMode"; driverId: string; value: TyreMode }
   | { type: "nextCompound"; driverId: string; value: Compound }
-  | { type: "pitNow"; driverId: string }
-  | { type: "schedulePit"; driverId: string; lap: number }
-  | { type: "cancelPit"; driverId: string };
+  | { type: "pitNow"; driverId: string; revision?: number }
+  | { type: "schedulePit"; driverId: string; lap: number; revision?: number }
+  | { type: "cancelPit"; driverId: string; revision?: number }
+  | { type: "applyStrategyPlan"; driverId: string; plan: RaceStrategyPlan; revision: number };
 
 export interface QualifyingEntry {
   driverId: string;
@@ -269,6 +354,164 @@ export interface QualifyingResult {
   segments: { segment: 1 | 2 | 3; entries: QualifyingEntry[] }[];
   grid: string[];
 }
+
+export type QualifyingCarStatus = "garage" | "out" | "flying" | "in" | "eliminated" | "finished";
+export type QualifyingSessionStatus = "running" | "between" | "finished";
+
+export interface QualifyingAttempt {
+  id: number;
+  segment: 1 | 2 | 3;
+  compound: Compound;
+  fuelLoad: number;
+  tyrePrep: TyreMode;
+  startedAt: number;
+  completedAt: number | null;
+  lapTime: number | null;
+  sectors: (number | null)[];
+  valid: boolean;
+  invalidReason: string | null;
+  aborted: boolean;
+  trafficLoss: number;
+  setOrder: number | null;
+}
+
+export interface QualifyingCarState {
+  driverId: string;
+  teamId: string;
+  status: QualifyingCarStatus;
+  position: number;
+  distance: number;
+  speed: number;
+  lane: number;
+  currentLapTime: number;
+  currentSector: number;
+  currentLapType: "out" | "flying" | "in" | null;
+  targetLapTime: number;
+  lastLap: number | null;
+  bestLap: number | null;
+  bestLapSetOrder: number | null;
+  lastSectors: (number | null)[];
+  bestSectors: (number | null)[];
+  segmentBestSectors: Record<1 | 2 | 3, (number | null)[]>;
+  segmentBest: Record<1 | 2 | 3, number | null>;
+  segmentSetOrder: Record<1 | 2 | 3, number | null>;
+  eliminatedIn: 1 | 2 | 3 | null;
+  tyre: TyreState;
+  compound: Compound;
+  fuelLoad: number;
+  tyrePrep: TyreMode;
+  nextCompound: Compound;
+  nextFuelLoad: number;
+  nextTyrePrep: TyreMode;
+  setsRemaining: Record<Compound, number>;
+  attempts: QualifyingAttempt[];
+  currentAttempt: number | null;
+  flyingRemaining: number;
+  runLaps: number;
+  aborted: boolean;
+  trafficLoss: number;
+  ai: boolean;
+  aiNextSendAt: number | null;
+  aiAttempts: number;
+  aiMaxAttempts: number;
+  car: CarAttributes;
+  attributes: DriverAttributes;
+  setup: CarSetup;
+}
+
+export interface QualifyingEvent {
+  id: number;
+  clock: number;
+  segment: 1 | 2 | 3;
+  driverId?: string;
+  message: string;
+  severity: "info" | "success" | "warn" | "danger";
+}
+
+export interface QualifyingSessionState {
+  id: string;
+  seed: string;
+  type: "quali" | "sprintQuali";
+  circuitId: string;
+  round: number;
+  segment: 1 | 2 | 3;
+  status: QualifyingSessionStatus;
+  clock: number;
+  segmentDuration: number;
+  trackEvolution: number;
+  rubber: number;
+  rain: number;
+  airTemp: number;
+  trackTemp: number;
+  nextWeatherAt: number | null;
+  nextRain: number;
+  cars: QualifyingCarState[];
+  events: QualifyingEvent[];
+  fastestLap: { driverId: string; time: number; segment: 1 | 2 | 3 } | null;
+  sequence: number;
+  playerTeams: string[];
+  confidence: Record<string, number>;
+}
+
+export interface QualifyingCarView {
+  driverId: string;
+  teamId: string;
+  status: QualifyingCarStatus;
+  position: number;
+  distance: number;
+  speed: number;
+  lastLap: number | null;
+  bestLap: number | null;
+  lastSectors: (number | null)[];
+  bestSectors: (number | null)[];
+  compound: Compound;
+  fuelLoad: number;
+  tyreWear: number;
+  tyreTemp: number;
+  attempts: number;
+  currentAttempt: number | null;
+  flyingRemaining: number;
+  recentLaps: { id: number; valid: boolean; time: number | null; compound: Compound; aborted: boolean; sectors: (number | null)[] }[];
+  setsRemaining: Record<Compound, number>;
+  nextCompound: Compound;
+  nextFuelLoad: number;
+  nextTyrePrep: TyreMode;
+  eliminatedIn: 1 | 2 | 3 | null;
+  gapToLeader: number | null;
+  trafficLoss: number;
+  improved: boolean;
+  canSend: boolean;
+  requiredTime: number;
+  ai: boolean;
+}
+
+export interface QualifyingView {
+  id: string;
+  type: "quali" | "sprintQuali";
+  circuitId: string;
+  round: number;
+  segment: 1 | 2 | 3;
+  status: QualifyingSessionStatus;
+  clock: number;
+  segmentDuration: number;
+  trackEvolution: number;
+  rubber: number;
+  rain: number;
+  airTemp: number;
+  trackTemp: number;
+  condition: string;
+  cutoff: number | null;
+  allowedCompounds: Compound[];
+  cars: QualifyingCarView[];
+  events: QualifyingEvent[];
+  fastestLap: { driverId: string; time: number; segment: 1 | 2 | 3 } | null;
+  playerTeams: string[];
+}
+
+export type QualifyingCommand =
+  | { type: "plan"; driverId: string; compound?: Compound; fuelLoad?: number; tyrePrep?: TyreMode }
+  | { type: "sendOut"; driverId: string }
+  | { type: "abort"; driverId: string };
 
 export interface PracticeProgramResult {
   type: "qualifying" | "race" | "tyres";
@@ -349,6 +592,7 @@ export interface TeamState {
   sponsorId: string | null;
   sponsorBonusPaid: number;
   staff: Record<StaffRole, StaffCandidate>;
+  pitCrew?: number; // 0-100; ausente em saves antigos, derivado na migração
   project: DevelopmentProject | null;
   components: { pu: number; cambio: number; freios: number; bateria: number };
   objectives: { descricao: string; targetPosition: number; bonus: number; completed: boolean };
@@ -382,8 +626,11 @@ export interface CareerRoundState {
   practice: PracticeState | null;
   setups: Record<string, CarSetup>;
   strategyPlans: Record<string, number | null>;
+  raceStrategyPlans?: Record<string, RaceStrategyPlan>;
+  tyreInventory?: Record<string, Record<Compound, number>>;
   sprintQualifying: QualifyingResult | null;
   qualifying: QualifyingResult | null;
+  qualifyingSession?: QualifyingSessionState | null;
   sprintResult: SessionResult | null;
   raceResult: SessionResult | null;
 }

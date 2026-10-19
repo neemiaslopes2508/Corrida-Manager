@@ -81,7 +81,7 @@ export function simulateQualifying(input: QualifyingInput): QualifyingResult {
       const entry = entries.get(t.driver.driverId)!;
       entry.position = i + 1;
       if (segment < 3) {
-        const cutoff = segment === 1 ? 15 : 10;
+        const cutoff = segment === 1 ? 16 : 10;
         if (i >= cutoff) entry.eliminatedIn = segment as 1 | 2;
       } else {
         entry.eliminatedIn = 3;
@@ -93,7 +93,7 @@ export function simulateQualifying(input: QualifyingInput): QualifyingResult {
   const all = input.drivers;
   const afterQ1 = runSegment(1, all);
   const q1Order = [...all].sort((a, b) => entries.get(a.driverId)!.q1! - entries.get(b.driverId)!.q1!);
-  const afterQ1Top = q1Order.slice(0, 15);
+  const afterQ1Top = q1Order.slice(0, 16);
   void afterQ1;
   runSegment(2, afterQ1Top);
   const q2Order = [...afterQ1Top].sort((a, b) => entries.get(a.driverId)!.q2! - entries.get(b.driverId)!.q2!);
@@ -104,7 +104,7 @@ export function simulateQualifying(input: QualifyingInput): QualifyingResult {
   const grid: string[] = [];
   for (const d of q3Order) grid.push(d.driverId);
   for (const d of q2Order.slice(10)) grid.push(d.driverId);
-  for (const d of q1Order.slice(15)) grid.push(d.driverId);
+  for (const d of q1Order.slice(16)) grid.push(d.driverId);
 
   for (const entry of entries.values()) {
     entry.time = entry.q3 ?? entry.q2 ?? entry.q1 ?? 0;

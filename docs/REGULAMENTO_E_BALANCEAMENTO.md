@@ -9,9 +9,11 @@
 
 ## Fim de semana
 
-- Austrália e Japão: treino livre → Q1/Q2/Q3 → corrida.
-- China: treino livre → Classificação Sprint → Sprint → Classificação → corrida.
-- Sprint Qualifying usa o mesmo modelo Q1/Q2/Q3, com 19 voltas de Sprint.
+- Austrália e Japão: treino livre → Q1/Q2/Q3 interativa → corrida.
+- China: treino livre → SQ1/SQ2/SQ3 → Sprint → Q1/Q2/Q3 → corrida.
+- Classificação: Q1 18 min (22 → 16), Q2 15 min (16 → 10), Q3 12 min (10).
+- Sprint Qualifying: SQ1 12 min (22 → 16), SQ2 10 min (16 → 10), SQ3 8 min (10).
+- Sprint Qualifying seca: médio em SQ1/SQ2 e macio em SQ3. Pista molhada libera intermediário/chuva.
 - Sprint não exige troca de compostos.
 
 ## Pneus
@@ -21,6 +23,14 @@
 - Um pit stop troca o composto escolhido em `Próximo pneu`.
 - Desgaste, temperatura, abrasividade, ritmo, estilo de gestão e habilidade do piloto alteram o desempenho.
 - A temperatura busca um equilíbrio; acima da janela ideal há perda de grip e mais desgaste.
+
+## Combustível e estoque de pneus
+
+- Não há reabastecimento durante a corrida.
+- A margem de combustível pode ser ajustada entre 92% e 100% da carga necessária; menor massa melhora o ritmo, mas pode exigir economia.
+- O estoque de pneus é simplificado e compartilhado entre classificação e corrida.
+- Fim de semana tradicional: 8 macios, 5 médios, 3 duros, 3 intermediários, 2 de chuva.
+- Fim de semana Sprint: 7 macios, 5 médios, 2 duros, 3 intermediários, 2 de chuva.
 
 ## Pit stops
 

@@ -11,6 +11,7 @@ import {
   renewDriver,
   replaceComponent,
   runPractice,
+  setRaceStrategy,
   setSetup,
   setStrategyPlan,
   signSponsor,
@@ -42,6 +43,11 @@ export function dispatchCareerAction(career: Career, action: CareerAction, actor
       if (!driver || !actorTeams.includes(driver.teamId)) return { ok: false, error: "Sem permissão sobre este piloto." };
       return setStrategyPlan(career, action.driverId, action.lap);
     }
+    case "setRaceStrategy": {
+      const driver = career.drivers.find((d) => d.driverId === action.driverId);
+      if (!driver || !actorTeams.includes(driver.teamId)) return { ok: false, error: "Sem permissão sobre este piloto." };
+      return setRaceStrategy(career, action.driverId, action.plan);
+    }
     case "runPractice": {
       if (!actorTeams.includes(action.teamId)) return { ok: false, error: "Sem permissão sobre esta equipe." };
       return runPractice(career, action.program, action.teamId);
@@ -49,11 +55,11 @@ export function dispatchCareerAction(career: Career, action: CareerAction, actor
     case "finishPractice":
       if (career.phase !== "practice") return { ok: false, error: "Fase inválida." };
       return finishPracticeAndQualify(career);
-    case "enterRace":
+    case "enterRace": {
       if (action.kind === "sprint" && career.phase !== "sprintQuali") return { ok: false, error: "Fase inválida." };
       if (action.kind === "race" && career.phase !== "qualifying") return { ok: false, error: "Fase inválida." };
-      enterRace(career, action.kind);
-      return { ok: true };
+      return enterRace(career, action.kind);
+    }
     case "continue":
       if (career.phase !== "results") return { ok: false, error: "Fase inválida." };
       continueAfterResults(career);

@@ -14,7 +14,7 @@ para:
 public/local-media/
 ```
 
-O projeto FM26 não foi alterado. Nenhuma imagem foi baixada da internet e o ComfyUI não foi usado.
+O projeto FM26 não foi alterado. Os retratos e logos vieram do FM26; as três fotos de circuito da V1.3.1 vieram do Wikimedia Commons e foram registradas no manifest. O ComfyUI não foi usado.
 
 ## Conteúdo importado
 
@@ -22,9 +22,11 @@ O projeto FM26 não foi alterado. Nenhuma imagem foi baixada da internet e o Com
 | --- | ---: | --- | --- |
 | Retratos de pilotos | 22 | PNG | 1000 × 1000, quadrados |
 | Logos de equipes | 11 | SVG | viewBox 96 × 96, fundo transparente |
+| Fotos de circuito | 3 | JPEG | recorte 1280 × 720 |
+| Bandeiras de países | 18 | PNG | 80 px de largura |
 | Manifest de origem | 1 | JSON | origem, licença e autorização de uso privado |
 
-Total aproximado: 6,4 MB.
+Total aproximado: 6,9 MB.
 
 O `manifest.json` foi mantido junto dos arquivos porque registra a origem, o titular dos direitos e a autorização de uso privado local. Ele não é usado como chave em tempo de execução; a associação do jogo é feita por IDs estáveis.
 
@@ -38,6 +40,7 @@ O caminho é resolvido por:
 ```text
 public/local-media/drivers/<driverId>.png
 public/local-media/teams/<teamId>.svg
+public/local-media/circuits/<circuitKey>.jpg
 ```
 
 O código fica em `src/media/season2026.ts`. Nomes exibidos, apelidos e posições no grid não são usados como chave. O módulo também mantém os aliases do FM26 (`driver_alex_albon` e `driver_sergio_perez`) para compatibilidade futura.
@@ -48,6 +51,7 @@ O código fica em `src/media/season2026.ts`. Nomes exibidos, apelidos e posiçõ
 
 - `DriverPortrait`: retrato quadrado com `object-fit: cover`, proporção preservada e tamanhos `xs` a `hero`.
 - `TeamLogo`: logo com `object-fit: contain`, placa clara para manter visíveis logos escuros e claros.
+- `CircuitPhoto`: foto de circuito com `object-fit: cover`, crédito opcional e fallback textual.
 
 Se o arquivo estiver ausente ou falhar ao carregar, o componente mostra um fallback textual: código do piloto com fundo escuro ou sigla da equipe em uma placa clara. O fallback não dispara requisições externas.
 
@@ -60,6 +64,22 @@ Se o arquivo estiver ausente ou falhar ao carregar, o componente mostra um fallb
 - Treino/classificação: retratos e logos na tabela e no grid.
 - Corrida: retrato do piloto selecionado na telemetria e retrato nos dois cards de estratégia. Tamanhos pequenos para preservar o layout full-screen sem rolagem no desktop.
 - Resultados e fim de temporada: retratos, logos e identidade dos campeões.
+
+## Fotos de circuito da V1.3.1
+
+As imagens foram obtidas no Wikimedia Commons, recortadas para 1280×720 e recomprimidas em JPEG para uso local.
+
+| Circuito | Arquivo | Autor | Licença | Origem |
+| --- | --- | --- | --- | --- |
+| Albert Park | `circuits/melbourne.jpg` | Planet Labs, Inc. | CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Melbourne_Grand_Prix_Circuit,_December_24,_2017_SkySat_(cropped).jpg) |
+| Shanghai | `circuits/shanghai.jpg` | emperornie | CC BY-SA 2.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Alonso_china_2013.jpg) |
+| Suzuka | `circuits/suzuka.jpg` | Cineyas | CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:RB20_During_the_2024_Japanese_Free_Practice.jpg) |
+
+A atribuição aparece no hero da visão geral e da preparação do GP, e no manifest local. As fotos são usadas apenas como contexto visual; o traçado funcional continua sendo o SVG do motor.
+
+## Bandeiras de países
+
+As bandeiras pequenas da V1.3.2 ficam em `public/local-media/flags/` e foram obtidas em [Flagcdn](https://flagcdn.com/). Os desenhos de bandeiras são de domínio público; o manifesto local registra os países usados. Elas identificam nacionalidades já presentes em `season2026.ts`, sem criar novos dados.
 
 ## Direitos e distribuição
 
@@ -86,11 +106,12 @@ npm run build
 
 `npm run check:media` confere:
 
-- 22 retratos e 11 logos no manifest;
+- 22 retratos, 11 logos e 3 fotos de circuito no manifest;
 - correspondência entre os IDs da temporada e os IDs da mídia;
 - existência, tamanho e caminho dos arquivos;
 - assinatura PNG e dimensões quadradas;
-- SVG válido, com `viewBox` e sem referência externa.
+- SVG válido, com `viewBox` e sem referência externa;
+- assinatura JPEG das fotos de circuito.
 
 ## Limitações
 

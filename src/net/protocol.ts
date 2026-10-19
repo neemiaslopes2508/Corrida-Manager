@@ -1,4 +1,4 @@
-import type { Career, CareerPhase, RaceCommand, RaceView, SessionResult } from "../engine/types";
+import type { Career, CareerPhase, QualifyingCommand, QualifyingView, RaceCommand, RaceStrategyPlan, RaceView, SessionResult } from "../engine/types";
 import type { CarAttributes } from "../data/season2026";
 
 export type CareerAction =
@@ -6,6 +6,7 @@ export type CareerAction =
   | { type: "enterPractice" }
   | { type: "setSetup"; driverId: string; patch: { downforce?: number; focus?: "qualifying" | "balanced" | "race"; startingCompound?: string; fuelLoad?: number } }
   | { type: "setStrategyPlan"; driverId: string; lap: number | null }
+  | { type: "setRaceStrategy"; driverId: string; plan: RaceStrategyPlan }
   | { type: "runPractice"; program: "qualifying" | "race" | "tyres"; teamId: string }
   | { type: "finishPractice" }
   | { type: "enterRace"; kind: "race" | "sprint" }
@@ -48,6 +49,8 @@ export type ClientMessage =
   | { type: "set_ready"; ready: boolean }
   | { type: "start_career" }
   | { type: "career_action"; action: CareerAction }
+  | { type: "qualifying_command"; command: QualifyingCommand }
+  | { type: "qualifying_control"; action: "pause" | "resume" | "speed" | "next" | "skip"; value?: number }
   | { type: "race_command"; command: RaceCommand }
   | { type: "race_control"; action: "pause" | "resume" | "speed"; value?: number }
   | { type: "leave" }
@@ -56,6 +59,8 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: "room_state"; room: RoomView; you: PlayerView; token?: string }
   | { type: "career_state"; career: Career }
+  | { type: "qualifying_view"; view: QualifyingView; paused: boolean; speed: number }
+  | { type: "qualifying_finished"; sessionType: "quali" | "sprintQuali"; grid: string[] }
   | { type: "race_view"; view: RaceView; kind: "race" | "sprint"; paused: boolean; speed: number; totalLaps: number }
   | { type: "race_started"; kind: "race" | "sprint"; totalLaps: number }
   | { type: "race_finished"; result: SessionResult; kind: "race" | "sprint" }

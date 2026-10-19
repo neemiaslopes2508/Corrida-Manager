@@ -3,6 +3,7 @@ import { CIRCUITS_2026, DRIVERS_2026, TEAMS_2026, TEAM_BY_ID } from "../data/sea
 import type { CareerSummary } from "../engine/types";
 import { Badge, Button, Panel, money } from "./Common";
 import { DriverPortrait, TeamLogo } from "./Media";
+import { CountryFlag } from "./Visuals";
 
 export function MenuScreen({
   saves,
@@ -151,7 +152,7 @@ export function MenuScreen({
           <div className="calendar-strip">
             {CIRCUITS_2026.map((c) => (
               <div className="calendar-chip" key={c.id}>
-                <span className="flag">{c.bandeira}</span>
+                <CountryFlag country={c.pais} className="calendar-menu-flag" />
                 <div>
                   <strong>{c.gp}</strong>
                   <span>{c.cidade} · {c.voltas} voltas {c.sprint ? "· Sprint" : ""}</span>
@@ -211,7 +212,7 @@ export function TeamSelectScreen({ onBack, onStart }: { onBack: () => void; onSt
                     <span>{t.sigla}</span>
                   </div>
                 </div>
-                <span className="muted small">{t.pais}</span>
+                <span className="muted small"><CountryFlag country={t.pais} /> {t.pais}</span>
                 <div className="team-card-drivers">
                   {t.pilotos.map((id) => {
                     const d = DRIVERS_2026.find((x) => x.id === id)!;
@@ -240,7 +241,7 @@ export function TeamSelectScreen({ onBack, onStart }: { onBack: () => void; onSt
                 <div className="team-detail-brand">
                   <TeamLogo teamId={team.id} size="lg" decorative />
                   <div>
-                    <span className="kicker">{team.pais}</span>
+                    <span className="kicker"><CountryFlag country={team.pais} /> {team.pais}</span>
                     <h2>{team.nomeOficial}</h2>
                   </div>
                 </div>
@@ -253,7 +254,7 @@ export function TeamSelectScreen({ onBack, onStart }: { onBack: () => void; onSt
                     <DriverPortrait driverId={d.id} size="sm" decorative />
                     <div>
                       <strong>#{d.numero} {d.nome}</strong>
-                      <span className="muted small">{d.nacionalidade}</span>
+                      <span className="muted small"><CountryFlag country={d.nacionalidade} /> {d.nacionalidade}</span>
                     </div>
                   </div>
                   <div className="mini-attr">
