@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { CircuitData } from "../data/season2026";
 import { TEAM_BY_ID } from "../data/season2026";
 import { buildTrack, pitPoseAt, poseAt } from "../engine/track";
+import { clampLaneShift, interpolateDistance, shouldSnapDistance, type DistanceAnimation } from "./trackAnimation";
 
 export interface TrackMapCar {
   driverId: string;
@@ -25,6 +26,39 @@ interface Props {
 
 export function TrackMap({ circuit, cars = [], selectedDriverId, onSelect, compact = false, showPit = true, highlightTeams = [] }: Props) {
   const track = useMemo(() => buildTrack(circuit), [circuit.id]);
+  const animations = useRef<Map<string, DistanceAnimation>>(new Map());
+  const [, setFrame] = useState(0);
+
+  useEffect(() => {
+    const now = performance.now();
+    const next = new Map<string, DistanceAnimation>();
+    for (const car of cars) {
+      const previous = animations.current.get(car.driverId);
+      const current = previous ? interpolateDistance(previous, now) : car.distance;
+      if (!previous || shouldSnapDistance(current, car.distance, track.length)) {
+        next.set(car.driverId, { from: car.distance, to: car.distance, startedAt: now, duration: 0 });
+      } else {
+        next.set(car.driverId, { from: current, to: car.distance, startedAt: now, duration: 120 });
+      }
+    }
+    animations.current = next;
+    setFrame((frame) => frame + 1);
+  }, [cars, track.length]);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const now = performance.now();
+      const active = [...animations.current.values()].some(
+        (animation) => animation.duration > 0 && now < animation.startedAt + animation.duration,
+      );
+      if (active) setFrame((frame) => frame + 1);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   const bounds = useMemo(() => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const p of track.viewPoints) {
@@ -47,6 +81,7 @@ export function TrackMap({ circuit, cars = [], selectedDriverId, onSelect, compa
   const startLine = lineAt(start, 16);
   const s1 = lineAt(sector1, 10);
   const s2 = lineAt(sector2, 10);
+  const now = performance.now();
 
   return (
     <div className={`track-map ${compact ? "compact" : ""}`}>
@@ -79,8 +114,10 @@ export function TrackMap({ circuit, cars = [], selectedDriverId, onSelect, compa
         {cars.map((car) => {
           const team = TEAM_BY_ID[car.teamId];
           const inPit = car.pit?.state != null && car.pit.state !== "none";
-          const laneShift = hashLane(car.driverId) + (car.lane ?? 0) * 2.2;
-          const pose = inPit ? pitPoseAt(track, car.distance) : poseAt(track, car.distance, laneShift);
+          const animation = animations.current.get(car.driverId);
+          const displayDistance = animation ? interpolateDistance(animation, now) : car.distance;
+          const laneShift = clampLaneShift(hashLane(car.driverId) + (car.lane ?? 0) * 2.2, compact);
+          const pose = inPit ? pitPoseAt(track, displayDistance) : poseAt(track, displayDistance, laneShift);
           const x = pose.x;
           const y = pose.y;
           const selected = car.driverId === selectedDriverId;
@@ -130,7 +167,7 @@ export function TrackMap({ circuit, cars = [], selectedDriverId, onSelect, compa
 function hashLane(driverId: string): number {
   let h = 0;
   for (let i = 0; i < driverId.length; i++) h = (h * 31 + driverId.charCodeAt(i)) >>> 0;
-  return ((h % 7) - 3) * 1.15;
+  return ((h % 5) - 2) * 0.7;
 }
 
 function isLight(hex: string | undefined): boolean {  if (!hex) return false;

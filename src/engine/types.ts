@@ -142,6 +142,9 @@ export interface PitStateData {
   lapDelta: number;
 }
 
+export type DisputePhase = "none" | "approach" | "prepare" | "attempt" | "sideBySide" | "defend" | "counter";
+export type PassKind = "attack" | "pace" | "tyre" | "mistake";
+
 export interface RaceCar {
   driverId: string;
   teamId: string;
@@ -151,7 +154,29 @@ export interface RaceCar {
   startOffset: number;
   speed: number; // m/s
   form: number;
+  // largada: reação individual às luzes, tração e qualidade estimada
+  launchReaction: number; // segundos após as luzes até começar a acelerar
+  launchTraction: number; // multiplicador de aceleração inicial
+  launchQuality: number; // 0-1, qualidade estimada da largada
+  // ritmo por volta: variação determinística separada do RNG principal
+  lapPace: number;
+  lapPaceLap: number;
   attacking: boolean;
+  targetDriverId: string | null; // carro efetivamente atacado
+  attackStartedAt: number | null;
+  overtakeAttempts: number;
+  attackAttempts: number;
+  // máquina de disputa e personalidade
+  disputePhase: DisputePhase;
+  disputeStartedAt: number | null;
+  passKind: PassKind | null;
+  paceAdvantageTicks: number;
+  defending: boolean;
+  defendTargetId: string | null;
+  defendStartedAt: number | null;
+  counterUntil: number;
+  sideBySideTicks: number;
+  defendedAttempts: number;
   lap: number; // voltas completadas
   status: CarStatus;
   finishTime: number | null;
@@ -160,6 +185,12 @@ export interface RaceCar {
   lastLap: number | null;
   bestLap: number | null;
   lapTimes: number[];
+  // setores: tempos do último conjunto completo e melhores parciais
+  sectors: (number | null)[];
+  bestSectors: (number | null)[];
+  sectorBuffer: (number | null)[];
+  sectorStartTime: number;
+  sectorIndex: number;
   tyre: TyreState;
   fuelKg: number;
   fuelStartKg: number;
@@ -171,6 +202,9 @@ export interface RaceCar {
   pit: PitStateData;
   penalties: number;
   penaltyNotes: string[];
+  trackLimitWarnings: number;
+  contactWarnings: number;
+  dangerousWarnings: number;
   damage: number; // 0-1
   overtakeMode: boolean;
   overtakeCooldown: number;
@@ -210,6 +244,11 @@ export interface RaceEvent {
   message: string;
   driverId?: string;
   severity: "info" | "warn" | "danger" | "success";
+  adviceKey?: string;
+  passedDriverId?: string;
+  attackSuccess?: boolean;
+  passKind?: PassKind;
+  counterAttack?: boolean;
 }
 
 export interface RaceWeather {
@@ -297,9 +336,13 @@ export interface RaceCarView {
   pit: PitStateData;
   lastLap: number | null;
   bestLap: number | null;
+  sectors: (number | null)[];
+  bestSectors: (number | null)[];
   gapLeader: number;
   gapAhead: number;
   penalty: number;
+  penaltyNotes: string[];
+  trackLimitWarnings: number;
   damage: number;
   stops: number;
   overtakeMode: boolean;
@@ -519,15 +562,41 @@ export interface PracticeProgramResult {
   summary: string;
   confidenceGain: number;
   data: string[];
+  driverId?: string;
+  setup?: CarSetup;
+}
+
+export interface PracticeDriverState {
+  driverId: string;
+  teamId: string;
+  runs: number;
+  confidence: number;
+  programs: PracticeProgramResult[];
+  downforceEstimate: number;
+  downforceMargin: number;
+  bestQualifyingLap: number | null;
+  degradationPerLap: number | null;
+  degradationFactor: number;
+  fuelPerLap: number | null;
+  pitLoss: number | null;
+  compoundTimes: Record<"soft" | "medium" | "hard", number> | null;
+  tyreInfo: string;
+}
+
+export interface PracticeTeamState {
+  teamId: string;
+  drivers: Record<string, PracticeDriverState>;
 }
 
 export interface PracticeState {
+  /** Campos legados mantidos para saves antigos e telas que ainda os consultam. */
   runs: number;
   confidence: number;
   programs: PracticeProgramResult[];
   idealDownforce: number;
   tyreInfo: string;
   weatherForecast: string;
+  teams?: Record<string, PracticeTeamState>;
 }
 
 export interface SessionEntry {

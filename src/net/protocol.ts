@@ -7,7 +7,7 @@ export type CareerAction =
   | { type: "setSetup"; driverId: string; patch: { downforce?: number; focus?: "qualifying" | "balanced" | "race"; startingCompound?: string; fuelLoad?: number } }
   | { type: "setStrategyPlan"; driverId: string; lap: number | null }
   | { type: "setRaceStrategy"; driverId: string; plan: RaceStrategyPlan }
-  | { type: "runPractice"; program: "qualifying" | "race" | "tyres"; teamId: string }
+  | { type: "runPractice"; program: "qualifying" | "race" | "tyres"; teamId: string; driverId?: string }
   | { type: "finishPractice" }
   | { type: "enterRace"; kind: "race" | "sprint" }
   | { type: "continue" }

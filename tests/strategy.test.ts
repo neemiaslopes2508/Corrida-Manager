@@ -10,7 +10,9 @@ import {
   projectOvercut,
   projectRaceStrategy,
   projectUndercut,
+  recommendRaceAction,
   validateRacePlan,
+  type RecommendationContext,
 } from "../src/engine/raceStrategy";
 
 function setup(seed = "strategy-v13") {
@@ -21,7 +23,78 @@ function setup(seed = "strategy-v13") {
   return { career, circuit, team, driver };
 }
 
+function recommendationContext(overrides: Partial<RecommendationContext> = {}): RecommendationContext {
+  return {
+    lap: 20,
+    totalLaps: 50,
+    raceRemainingLaps: 30,
+    tyreWear: 50,
+    tyreAge: 10,
+    remainingLaps: 12,
+    plannedPitLap: 25,
+    windowStart: 23,
+    windowEnd: 27,
+    fuelKg: 70,
+    fuelPerLap: 2,
+    energy: 50,
+    rain: 0,
+    nextRainLap: -1,
+    trackStatus: "green",
+    undercutRisk: 0.2,
+    rivalPlannedStop: false,
+    pitLoss: 22,
+    compound: "medium",
+    ...overrides,
+  };
+}
+
 describe("estratégia V1.3", () => {
+  it("aplica o fator de degradação aprendido no treino à projeção", () => {
+    const { circuit, team, driver } = setup("strategy-practice-factor");
+    const plan = buildPlanWithStops(driver.driverId, 58, 1, ["medium", "hard"]);
+    const base = projectRaceStrategy({
+      plan,
+      circuit,
+      car: team.car,
+      driver: driver.attributes,
+      setup: { downforce: circuit.downforceIdeal, focus: "balanced" },
+      rain: 0,
+      trackTemp: 35,
+      airTemp: 25,
+      pitCrew: team.pitCrew ?? 70,
+      inventory: allocateTyreInventory(false),
+      degradationFactor: 1,
+    });
+    const learned = projectRaceStrategy({
+      plan,
+      circuit,
+      car: team.car,
+      driver: driver.attributes,
+      setup: { downforce: circuit.downforceIdeal, focus: "balanced" },
+      rain: 0,
+      trackTemp: 35,
+      airTemp: 25,
+      pitCrew: team.pitCrew ?? 70,
+      inventory: allocateTyreInventory(false),
+      degradationFactor: 1.2,
+    });
+    expect(learned.stints[0].endWear).toBeGreaterThan(base.stints[0].endWear);
+  });
+
+  it("corrige combustível, Safety Car e undercut nas recomendações", () => {
+    const fuel = recommendRaceAction(recommendationContext({ fuelKg: 10, raceRemainingLaps: 30 }));
+    expect(fuel?.key).toBe("fuel");
+    expect(fuel?.severity).toBe("danger");
+
+    const sc = recommendRaceAction(recommendationContext({ trackStatus: "sc", remainingLaps: 10, raceRemainingLaps: 4, tyreAge: 8 }));
+    expect(sc?.key).toBe("sc-pit");
+    const lateSc = recommendRaceAction(recommendationContext({ trackStatus: "sc", remainingLaps: 10, raceRemainingLaps: 2, tyreAge: 8 }));
+    expect(lateSc?.key).not.toBe("sc-pit");
+
+    expect(recommendRaceAction(recommendationContext({ lap: 24, undercutRisk: 0.8, rivalPlannedStop: false }))?.key).not.toBe("undercut");
+    expect(recommendRaceAction(recommendationContext({ lap: 24, undercutRisk: 0.8, rivalPlannedStop: true }))?.key).toBe("undercut");
+  });
+
   it("projeta planos diferentes com desgaste e pit loss reais", () => {
     const { circuit, team, driver } = setup();
     const one = buildPlanWithStops(driver.driverId, 58, 1, ["medium", "hard"]);

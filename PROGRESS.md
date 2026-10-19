@@ -1,4 +1,4 @@
-# Checkpoint de desenvolvimento — V1.3.3
+# Checkpoint de desenvolvimento — V1.3.6B
 
 Atualizado em 2026-10-19.
 
@@ -34,6 +34,35 @@ Atualizado em 2026-10-19.
 - V1.3.3: auditoria de alinhamento em cards, cabeçalhos, grids, colunas laterais, finanças, desenvolvimento, calendário, campeonato, pilotos, menu e seleção; KPIs preenchem a largura e cards de setup/pilotos mantêm alturas coerentes.
 - V1.3.3: mapa administrativo adaptado para empilhar em 1024×768 e 768×1024; sem overflow horizontal nas telas administrativas validadas.
 - V1.3.3: `typecheck`, 33 testes, build, `check:media` e `/api/health` 1.3.3 aprovados; corrida e classificação sem rolagem de página em 1280×720, 1366×768 e 1920×1080. Em 1024×768 e 768×1024, corrida/classificação mantêm o layout empilhado responsivo com rolagem vertical.
+- V1.3.4: ultrapassagens com `targetDriverId`, detecção após atualização de distâncias, evento oficial coerente, janela de ataque realista, bateria sustentável, defesa/atributos, dificuldade do circuito e checagem de faixa em contatos.
+- V1.3.4: animação dos marcadores por interpolação de distância com `poseAt`, snap em saltos grandes/correções para trás, limite de faixa e remoção da transição CSS em XY.
+- V1.3.4: treino livre por equipe/piloto, programas dependentes de carro/piloto/acerto, janela de downforce sem valor exato, ajuste final antes da classificação, confirmação do host e bloqueio de setup nas fases competitivas.
+- V1.3.4: planejador usa fator de degradação medido no treino; dados de pneus/combustível/pit aparecem na análise.
+- V1.3.4: notificações contextuais com prioridade, cooldown, deduplicação, dispensa e limite de duas; solo configurável (notificar, 1x ou pausar em crítico) e multiplayer host-only.
+- V1.3.4: correções de combustível, Safety Car, undercut, cooldown de bateria e tipo inválido de evento.
+- V1.3.4: `typecheck`, 54 testes (33 existentes + 21 focados), build, `check:media` e `/api/health` 1.3.4 aprovados; versão `1.3.4` no cliente, servidor e documentação.
+- V1.3.5: Overtake Mode por proximidade e bateria, defesa ativa, ataques sustentados, IA que ataca e defende em disputa direta, gestão de energia e cancelamento de ataques sob SC/VSC.
+- V1.3.5: eventos oficiais passam a carregar `passedDriverId` e `attackSuccess`; ultrapassagens sob bandeira amarela não são registradas.
+- V1.3.5: calibração com 10 seeds de calibração e 5 seeds fora da amostra; médias de 55,3/72,2/66,4 eventos oficiais por GP em Melbourne/Xangai/Suzuka, contra 20,6/29,8/33,8 na V1.3.4.
+- V1.3.5: `typecheck`, 55 testes, build, `check:media` e `/api/health` 1.3.5 aprovados; versão `1.3.5` no cliente, servidor e documentação.
+- V1.3.6A: cronometragem com interpolação do cruzamento da linha e dos três setores dentro do tick de 0,25 s; `lastLap`, `bestLap`, `lapTimes`, `fastestLap`, `finishTime` e setores passam a usar milissegundos, sem reduzir o passo do motor nem inventar precisão física.
+- V1.3.6A: largada individual determinística por piloto, com reação às luzes, tração, qualidade, influência de experiência/consistência/agressividade e RNG separado (`seed:launch:piloto`); largadas ruins e excelentes eventuais, sem vantagem fixa para jogador, equipe ou piloto.
+- V1.3.6A: proteção de ordem aplicada depois de todos os carros atualizarem; sem saltos em cadeia, sem inversões por leitura defasada e com no máximo uma posição por tick para o atacante. Primeira volta caiu de 87,3/87,7/88,2% para 35,0/27,4/25,9% de carros mudando de posição (Melbourne/Xangai/Suzuka, 10 seeds), mantendo disputas reais.
+- V1.3.6A: todas as ultrapassagens oficiais passaram a ser disputas reais (`attackSuccess`), com taxa de sucesso de 58–69% e zero passes sob SC/VSC; o limiar antigo de 0,5 m deixou de descartar passes legítimos no limite do tick.
+- V1.3.6A: limites de pista geram advertência nas duas primeiras ocorrências e +5 s a cada terceira; contato e manobra perigosa permanecem distintos, com motivo no evento e na telemetria. Penalidades totais caíram de ~15–18 para ~3–4 por corrida.
+- V1.3.6A: instrumentação de testes em `tests/raceMetrics.ts` (voltas, setores, largadas, primeira volta, passes genuínos, advertências, penalidades e inconsistências) e 12 testes focados em `tests/raceV136.test.ts`.
+- V1.3.6A: auditoria com 10 seeds de calibração e 6 seeds fora da amostra em Melbourne/Xangai/Suzuka; holdout confirmou primeira volta em 18,9–31,1% e 100% de passes por ataque.
+- V1.3.6A: `typecheck`, 67 testes, build, `check:media` e `/api/health` 1.3.6A aprovados; versão `1.3.6-a` no `package.json` (semver) e identificação `V1.3.6A` no servidor e documentação.
+- V1.3.6A: fases B e C da V1.3.6 não foram implementadas nesta entrega.
+- V1.3.6B: ritmo por volta determinístico por piloto (`seed:lappace:piloto:volta`), com amplitude dependente de consistência, erros ocasionais e experiência; a gestão de pneus preserva o ritmo do stint e o ruído nunca é aplicado por tick.
+- V1.3.6B: máquina de disputa com aproximação, preparação, tentativa, lado a lado, defesa e contra-ataque. O defensor decide aceitar o risco conforme defesa, experiência, agressividade, pneus, dano e posição.
+- V1.3.6B: passes legítimos por ritmo, pneus ou erro do rival podem ocorrer sem tentativa anterior marcada, desde que o carro estivesse atrás no início do tick, cruzasse o rival direto e tivesse vantagem real. A proteção contra salto de dois carros e inversão sem vantagem permanece.
+- V1.3.6B: auditoria de calibração (10 seeds): 35,8/39,4/27,5 passes por corrida em Melbourne/Xangai/Suzuka, com 21,4/22,4/16,4 passes por ritmo, 8,1/6,4/5,6 por pneus, 4,0/5,6/2,7 por erro e 2,3/5,0/2,8 por ataque. Ataques comprometidos: 9,4/12,4/8,8 por corrida.
+- V1.3.6B: a primeira volta manteve 7,5/10,8/6,5 passes por corrida e 7,3/8,7/5,0% de mudança líquida de posição; defesa, lado a lado e contra-ataque ficaram ativos (20,6/42,0/22,7 defesas, 117,6/178,3/129,1 ticks lado a lado e 0,3/0,8/0,4 contra-ataques por corrida).
+- V1.3.6B: diferença entre companheiros em 12,2/9,5/14,3% das voltas abaixo de 1 s; delta mediano de corrida 0,756/0,771/0,956 s. A IA usa atributos por piloto e janelas de parada por gestão de pneus, sem ordens de equipe.
+- V1.3.6B: variabilidade de ritmo por volta com desvio mediano de 0,0023–0,0024; holdout (6 seeds) confirmou 27,2–32,2 passes por corrida, 4,5–11,4% de mudança líquida na primeira volta e 6,2–9,5 passes na primeira volta.
+- V1.3.6B: `typecheck`, 76 testes, build, `check:media` e `/api/health` 1.3.6B aprovados; versão `1.3.6-b` no `package.json` (semver) e identificação `V1.3.6B` no servidor e documentação.
+- V1.3.6B: a fase C de bandeiras e incidentes não foi implementada nesta entrega.
 - Carreira solo completa (Austrália, China com Sprint, Japão) via UI, com campeões.
 - Corrida ao vivo com mapa SVG, marcadores, torre, telemetria, estratégia e feed.
 - Pit stops, compostos, penalidades, Safety Car e clima em execução.

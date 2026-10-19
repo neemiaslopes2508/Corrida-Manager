@@ -284,6 +284,7 @@ export interface StintProjectionInput {
   tyreMode?: TyreMode;
   fuelKg: number;
   fuelStartKg: number;
+  degradationFactor?: number;
 }
 
 export function projectStint(input: StintProjectionInput): TyreProjection {
@@ -312,7 +313,8 @@ export function projectStint(input: StintProjectionInput): TyreProjection {
     const speed = track.length / Math.max(30, lapTime);
     tyre.temp = updateTyreTemperature(tyre, input.pace ?? "normal", input.tyreMode ?? "normal", speed, input.airTemp, input.trackTemp, input.rain, 1);
     const wear = wearPerLap(tyre, tyre.compound, input.pace ?? "normal", input.tyreMode ?? "normal", input.driver, input.circuit.abrasividade, input.rain, input.trackTemp) *
-      (1.08 - input.car.gestaoPneus * 0.0016);
+      (1.08 - input.car.gestaoPneus * 0.0016) *
+      clamp(input.degradationFactor ?? 1, 0.75, 1.25);
     tyre.wear = clamp(tyre.wear + wear, 0, 100);
     tyre.ageLaps += 1;
     if (Math.abs(tyre.temp - COMPOUNDS[tyre.compound].optimalTemp) > 8) warmupLaps += 1;
@@ -345,6 +347,7 @@ export function projectRaceStrategy(params: {
   pitCrew: number;
   inventory?: Record<Compound, number>;
   trackStatus?: "green" | "sc" | "vsc";
+  degradationFactor?: number;
 }): RaceStrategyProjection {
   let startLap = 0;
   let fuelKg = requiredFuelKg(params.circuit, params.plan.stints.reduce((total, stint) => total + stint.laps, 0));
@@ -367,6 +370,7 @@ export function projectRaceStrategy(params: {
       airTemp: params.airTemp,
       fuelKg,
       fuelStartKg,
+      degradationFactor: params.degradationFactor,
     });
     stints.push(projection);
     startLap += stint.laps;
@@ -473,6 +477,7 @@ export function projectTyreLife(params: {
 export interface RecommendationContext {
   lap: number;
   totalLaps: number;
+  raceRemainingLaps: number;
   tyreWear: number;
   tyreAge: number;
   remainingLaps: number;
@@ -486,34 +491,34 @@ export interface RecommendationContext {
   nextRainLap: number;
   trackStatus: "green" | "sc" | "vsc" | "chequered";
   undercutRisk: number;
+  rivalPlannedStop: boolean;
   pitLoss: number;
   compound: Compound;
 }
 
 export function recommendRaceAction(context: RecommendationContext): StrategyRecommendation | null {
   if (context.lap < 1) return null;
-  const keyFor = (key: string) => `${key}:${Math.floor(context.lap / 3)}`;
-  if (context.trackStatus === "sc" && context.tyreAge >= 6 && context.remainingLaps < 12) {
-    return { key: keyFor("sc-pit"), lap: context.lap, severity: "success", action: "pit", message: "Safety Car: janela de pit stop vantajosa. Considere trocar os pneus." };
+  if (context.trackStatus === "sc" && context.tyreAge >= 6 && context.remainingLaps < 12 && context.raceRemainingLaps > 3) {
+    return { key: "sc-pit", lap: context.lap, severity: "success", action: "pit", message: "Safety Car: janela de pit stop vantajosa. Considere trocar os pneus." };
   }
   if (context.tyreWear >= 82) {
-    return { key: keyFor("tyre-limit"), lap: context.lap, severity: "danger", action: "pit", message: `Pneus em ${Math.round(context.tyreWear)}%: risco alto de perda de desempenho.` };
+    return { key: "tyre-limit", lap: context.lap, severity: "danger", action: "pit", message: `Pneus em ${Math.round(context.tyreWear)}%: risco alto de perda de desempenho.` };
   }
   if (context.tyreWear >= 70 && context.plannedPitLap != null && context.lap >= context.plannedPitLap - 2) {
-    return { key: keyFor("extend"), lap: context.lap, severity: "warn", action: "extend", message: `Desgaste em ${Math.round(context.tyreWear)}%. Prolongar o stint aumenta o risco.` };
+    return { key: "extend", lap: context.lap, severity: "warn", action: "pit", message: `Desgaste em ${Math.round(context.tyreWear)}%. Considere antecipar a parada; prolongar aumenta o risco.` };
   }
   if (context.nextRainLap > 0 && context.nextRainLap - context.lap <= 3 && context.rain < 0.15) {
-    return { key: keyFor("rain"), lap: context.lap, severity: "warn", action: "info", message: `Chuva prevista para a volta ${context.nextRainLap}. Prepare a troca de pneus.` };
+    return { key: "rain", lap: context.lap, severity: "warn", action: "info", message: `Chuva prevista para a volta ${context.nextRainLap}. Prepare a troca de pneus.` };
   }
   const lapsOfFuel = context.fuelKg / Math.max(0.01, context.fuelPerLap);
-  if (lapsOfFuel + 0.8 < context.totalLaps - context.lap) {
-    return { key: keyFor("fuel"), lap: context.lap, severity: "danger", action: "save", message: `Combustível para ~${Math.floor(lapsOfFuel)} voltas. Reduza o consumo ou arrisque perder ritmo.` };
+  if (lapsOfFuel + 0.8 < context.raceRemainingLaps) {
+    return { key: "fuel", lap: context.lap, severity: "danger", action: "save", message: `Combustível para ~${Math.floor(lapsOfFuel)} voltas. Reduza o consumo ou arrisque perder ritmo.` };
   }
   if (context.energy < 8 && context.lap > 3) {
-    return { key: keyFor("energy"), lap: context.lap, severity: "warn", action: "save", message: "Bateria baixa: poupe energia para defender ou atacar." };
+    return { key: "energy", lap: context.lap, severity: "warn", action: "save", message: "Bateria baixa: poupe energia para defender ou atacar." };
   }
-  if (context.undercutRisk > 0.65 && context.windowStart != null && context.lap >= context.windowStart - 1) {
-    return { key: keyFor("undercut"), lap: context.lap, severity: "warn", action: "pit", message: "Rival em zona de undercut. Considere antecipar a parada." };
+  if (context.undercutRisk > 0.65 && context.rivalPlannedStop && context.windowStart != null && context.lap >= context.windowStart - 1) {
+    return { key: "undercut", lap: context.lap, severity: "warn", action: "pit", message: "Rival em zona de undercut. Considere antecipar a parada." };
   }
   return null;
 }

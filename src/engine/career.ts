@@ -18,11 +18,14 @@ import { createRaceState, createWeather, defaultSetup, describeWeather, raceToSe
 import type { RaceConfig } from "./types";
 import { simulateQualifying, type QualifyingInput } from "./qualifying";
 import { createQualifyingSession, qualifyingResultFromSession, type QualifyingSessionInput } from "./qualifyingSession";
+import { initialTyre, wearPerLap } from "./tyres";
 import {
   allocateTyreInventory,
   buildPlanWithStops,
   cloneInventory,
+  estimateLapTime,
   estimatePitLoss,
+  fuelPerLap,
   makeDefaultRacePlan,
   normalizeRacePlan,
   validateRacePlan,
@@ -36,8 +39,10 @@ import type {
   Compound,
   DriverRaceSpec,
   LedgerEntry,
+  PracticeDriverState,
   PracticeProgramResult,
   PracticeState,
+  PracticeTeamState,
   QualifyingResult,
   QualifyingSessionState,
   RaceStrategyPlan,
@@ -132,8 +137,11 @@ function createDrivers(): CareerDriver[] {
 
 function driverSetup(circuit: CircuitData, ai: boolean, index: number, sprint: boolean): CarSetup {
   const rng = createRng(`${circuit.id}:setup:${index}`);
+  // Nenhum carro começa com o acerto perfeito: o treino livre é o que
+  // estreita a faixa provável e permite decidir o ajuste final.
+  const spread = ai ? 0.06 : 0.10;
   return {
-    downforce: ai ? Math.max(0.15, Math.min(0.95, circuit.downforceIdeal + rng.range(-0.06, 0.06))) : circuit.downforceIdeal,
+    downforce: Math.max(0.15, Math.min(0.95, circuit.downforceIdeal + rng.range(-spread, spread))),
     focus: "balanced",
     startingCompound: sprint ? "soft" : "medium",
     fuelLoad: 1,
@@ -265,6 +273,98 @@ export function getDriversOfTeam(career: Career, teamId: string): CareerDriver[]
   return career.drivers.filter((d) => d.teamId === teamId);
 }
 
+function practiceForecast(career: Career): string {
+  const circuit = circuitOfRound(career);
+  const weather = createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`);
+  return weather.map((w) => `Volta ${w.fromLap}: ${describeWeather(w.rain)}`).join(" · ");
+}
+
+function initialPracticeMargin(confidence: number): number {
+  return Math.max(0.035, Math.min(0.24, 0.24 - confidence * 0.0019));
+}
+
+function createPracticeDriverState(
+  career: Career,
+  team: TeamState,
+  driver: CareerDriver,
+  seedIndex: number,
+): PracticeDriverState {
+  const circuit = circuitOfRound(career);
+  const rng = createRng(`${career.seed}:practice:${career.roundIndex}:${team.teamId}:${driver.driverId}:init`);
+  const confidence = 35;
+  return {
+    driverId: driver.driverId,
+    teamId: team.teamId,
+    runs: 0,
+    confidence,
+    programs: [],
+    downforceEstimate: Math.max(0.08, Math.min(0.95, circuit.downforceIdeal + rng.range(-0.09, 0.09) + seedIndex * 0.002)),
+    downforceMargin: initialPracticeMargin(confidence),
+    bestQualifyingLap: null,
+    degradationPerLap: null,
+    degradationFactor: 1,
+    fuelPerLap: null,
+    pitLoss: null,
+    compoundTimes: null,
+    tyreInfo: "Sem dados de pneus. Rode o programa de compostos.",
+  };
+}
+
+function normalizePracticeTeams(career: Career, state: PracticeState): void {
+  const circuit = circuitOfRound(career);
+  const legacy = {
+    runs: Math.max(0, Math.min(3, state.runs ?? 0)),
+    confidence: Math.max(35, Math.min(100, state.confidence ?? 35)),
+    programs: Array.isArray(state.programs) ? state.programs : [],
+    idealDownforce: state.idealDownforce ?? circuit.downforceIdeal,
+  };
+  state.weatherForecast = state.weatherForecast || practiceForecast(career);
+  state.idealDownforce = legacy.idealDownforce;
+  state.teams = state.teams ?? {};
+  for (const teamId of career.playerTeams) {
+    const team = career.teams.find((entry) => entry.teamId === teamId);
+    if (!team) continue;
+    const teamState = state.teams[teamId] ?? { teamId, drivers: {} };
+    teamState.drivers = teamState.drivers ?? {};
+    const teamDrivers = getDriversOfTeam(career, teamId);
+    teamDrivers.forEach((driver, index) => {
+      const existing = teamState.drivers[driver.driverId];
+      if (!existing) {
+        const created = createPracticeDriverState(career, team, driver, index);
+        // Saves antigos tinham confiança/programas globais. A migração mantém
+        // os dados no primeiro piloto e dá aos demais a confiança-base.
+        if (index === 0 && legacy.runs > 0) {
+          created.runs = legacy.runs;
+          created.confidence = legacy.confidence;
+          created.programs = [...legacy.programs];
+          created.downforceEstimate = legacy.idealDownforce;
+          created.downforceMargin = initialPracticeMargin(created.confidence);
+          const lastTyres = [...legacy.programs].reverse().find((program) => program.type === "tyres");
+          created.tyreInfo = lastTyres?.summary ?? created.tyreInfo;
+        }
+        teamState.drivers[driver.driverId] = created;
+      } else {
+        existing.runs = Math.max(0, Math.min(3, existing.runs ?? 0));
+        existing.confidence = Math.max(35, Math.min(100, existing.confidence ?? 35));
+        existing.programs = Array.isArray(existing.programs) ? existing.programs : [];
+        existing.downforceEstimate = Math.max(0.05, Math.min(0.98, existing.downforceEstimate ?? circuit.downforceIdeal));
+        existing.downforceMargin = Math.max(0.035, Math.min(0.32, existing.downforceMargin ?? initialPracticeMargin(existing.confidence)));
+        existing.degradationFactor = Math.max(0.75, Math.min(1.25, existing.degradationFactor ?? 1));
+        existing.tyreInfo = existing.tyreInfo || "Sem dados de pneus. Rode o programa de compostos.";
+      }
+    });
+    state.teams[teamId] = teamState;
+  }
+  const primary = career.playerTeams.map((teamId) => state.teams?.[teamId]).find((team) => team);
+  const primaryDriver = primary ? Object.values(primary.drivers)[0] : undefined;
+  if (primaryDriver) {
+    state.runs = primaryDriver.runs;
+    state.confidence = primaryDriver.confidence;
+    state.programs = primaryDriver.programs;
+    state.tyreInfo = primaryDriver.tyreInfo;
+  }
+}
+
 export function practiceFor(career: Career): PracticeState {
   const round = currentRound(career);
   if (!round.practice) {
@@ -272,14 +372,24 @@ export function practiceFor(career: Career): PracticeState {
     const weather = createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`);
     round.practice = {
       runs: 0,
-      confidence: 0,
+      confidence: 35,
       programs: [],
       idealDownforce: circuit.downforceIdeal,
       tyreInfo: "Sem dados de pneus. Rode o programa de compostos.",
       weatherForecast: weather.map((w) => `Volta ${w.fromLap}: ${describeWeather(w.rain)}`).join(" · "),
+      teams: {},
     };
   }
+  normalizePracticeTeams(career, round.practice);
   return round.practice;
+}
+
+export function practiceDriverFor(career: Career, teamId: string, driverId?: string): PracticeDriverState | null {
+  const state = practiceFor(career);
+  const team = state.teams?.[teamId];
+  if (!team) return null;
+  const resolvedDriverId = driverId ?? getDriversOfTeam(career, teamId)[0]?.driverId;
+  return resolvedDriverId ? team.drivers[resolvedDriverId] ?? null : null;
 }
 
 export function enterPrep(career: Career): void {
@@ -299,6 +409,9 @@ export function setSetup(career: Career, driverId: string, patch: Partial<CarSet
   const driver = career.drivers.find((d) => d.driverId === driverId);
   if (!driver) return { ok: false, error: "Piloto não encontrado." };
   if (!career.playerTeams.includes(driver.teamId)) return { ok: false, error: "Piloto não pertence à sua equipe." };
+  if (career.phase !== "prep" && career.phase !== "practice") {
+    return { ok: false, error: "O acerto só pode ser alterado na preparação ou no treino livre." };
+  }
   const round = currentRound(career);
   const current = round.setups[driverId] ?? defaultSetup();
   round.setups[driverId] = {
@@ -346,60 +459,158 @@ export function setRaceStrategy(career: Career, driverId: string, plan: RaceStra
   return { ok: true };
 }
 
-export function runPractice(career: Career, type: PracticeProgramResult["type"], teamId?: string): { ok: boolean; error?: string; result?: PracticeProgramResult } {
+export function runPractice(
+  career: Career,
+  type: PracticeProgramResult["type"],
+  teamId?: string,
+  driverId?: string,
+): { ok: boolean; error?: string; result?: PracticeProgramResult } {
   if (career.phase !== "practice") return { ok: false, error: "Não está no treino livre." };
   const state = practiceFor(career);
-  if (state.runs >= 3) return { ok: false, error: "Programa de treino concluído." };
   const circuit = circuitOfRound(career);
   const effectiveTeamId = teamId ?? career.playerTeams[0];
+  if (!career.playerTeams.includes(effectiveTeamId)) return { ok: false, error: "Sem permissão sobre esta equipe." };
   const team = career.teams.find((t) => t.teamId === effectiveTeamId);
   if (!team) return { ok: false, error: "Equipe inválida." };
   const drivers = getDriversOfTeam(career, team.teamId);
-  const driver = drivers[0];
-  const rng = createRng(`${career.seed}:practice:${career.roundIndex}:${type}:${state.runs}`);
+  const driver = driverId ? drivers.find((entry) => entry.driverId === driverId) : drivers[0];
+  if (!driver) return { ok: false, error: "Piloto inválido para esta equipe." };
+  const driverState = practiceDriverFor(career, team.teamId, driver.driverId);
+  if (!driverState) return { ok: false, error: "Estado de treino indisponível." };
+  if (driverState.runs >= 3) return { ok: false, error: `Os três programas de ${driver.driverId.replace(/^driver_/, "").replace(/_/g, " ")} já foram concluídos.` };
+
+  const rng = createRng(`${career.seed}:practice:${career.roundIndex}:${team.teamId}:${driver.driverId}:${type}:${driverState.runs}`);
+  const weather = createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`);
+  const startRain = weather[0]?.rain ?? 0;
+  const trackTemp = weather[0]?.trackTemp ?? 35;
+  const setup = currentRound(career).setups[driver.driverId] ?? defaultSetup();
+  const confidenceGain = type === "qualifying" ? 20 : type === "race" ? 18 : 16;
+  const staffBonus = Math.round((team.staff.engenheiro_chefe.rating - 70) / 10);
   let result: PracticeProgramResult;
+
   if (type === "qualifying") {
-    const hint = Math.round((state.idealDownforce + rng.range(-0.05, 0.05)) * 100);
+    const estimate = estimateLapTime({
+      circuit,
+      car: team.car,
+      driver: driver.attributes,
+      setup,
+      tyre: initialTyre("soft"),
+      rain: startRain,
+      fuelKg: 5,
+      fuelStartKg: 5,
+      pace: "attack",
+      tyreMode: "push",
+    });
+    const bestLap = estimate + rng.range(-0.12, 0.12);
+    driverState.bestQualifyingLap = driverState.bestQualifyingLap == null
+      ? bestLap
+      : Math.min(driverState.bestQualifyingLap, bestLap);
+    const nextMargin = Math.max(0.035, driverState.downforceMargin * 0.52);
+    const nextEstimate = circuit.downforceIdeal + rng.range(-nextMargin * 0.28, nextMargin * 0.28);
+    driverState.downforceEstimate = driverState.runs === 0
+      ? nextEstimate
+      : driverState.downforceEstimate * 0.35 + nextEstimate * 0.65;
+    driverState.downforceMargin = nextMargin;
+    const low = Math.max(0, driverState.downforceEstimate - driverState.downforceMargin);
+    const high = Math.min(1, driverState.downforceEstimate + driverState.downforceMargin);
+    const inside = setup.downforce >= low && setup.downforce <= high;
     result = {
       type,
       label: "Simulação de classificação",
-      summary: `Melhor volta estimada com pneus macios: ${(circuit.baseLapTime - 0.4 + rng.range(-0.3, 0.3)).toFixed(3)}s.`,
-      confidenceGain: 34,
+      summary: `Melhor volta simulada com macios: ${bestLap.toFixed(3)}s. Faixa provável de downforce: ${Math.round(low * 100)}%–${Math.round(high * 100)}%.`,
+      confidenceGain,
       data: [
-        `Janela de downforce recomendada: ${Math.max(0, hint - 8)}%–${Math.min(100, hint + 8)}%`,
-        `Setor 1: ${rng.range(0.2, 0.5).toFixed(2)}s de margem para o limite`,
-        `Setor 3: ${rng.range(0.1, 0.6).toFixed(2)}s de margem para o limite`,
+        `Faixa provável de downforce: ${Math.round(low * 100)}%–${Math.round(high * 100)}%`,
+        `Precisão da faixa: ±${Math.round(driverState.downforceMargin * 100)} pontos percentuais`,
+        inside ? "O acerto atual está dentro da faixa medida." : "O acerto atual está fora da faixa medida; ajuste antes da classificação.",
+        `Medição feita com downforce ${Math.round(setup.downforce * 100)}% e foco ${setup.focus}.`,
       ],
+      driverId: driver.driverId,
+      setup: { ...setup },
     };
   } else if (type === "race") {
-    const deg = (2.8 + circuit.abrasividade * 2 + rng.range(-0.4, 0.5)).toFixed(2);
+    const tyre = initialTyre("medium");
+    const baseWear = wearPerLap(tyre, "medium", "normal", "normal", driver.attributes, circuit.abrasividade, startRain, trackTemp) *
+      (1.08 - team.car.gestaoPneus * 0.0016);
+    const setupWear = 1 +
+      Math.abs(setup.downforce - circuit.downforceIdeal) * 0.12 +
+      (setup.focus === "qualifying" ? 0.02 : setup.focus === "race" ? -0.01 : 0);
+    const measuredWear = Math.max(0.2, baseWear * setupWear * rng.range(0.96, 1.04));
+    const factor = Math.max(0.75, Math.min(1.25, measuredWear / Math.max(0.2, baseWear)));
+    const consumption = fuelPerLap(circuit) * rng.range(0.98, 1.02);
+    const pitLoss = estimatePitLoss(circuit, team.pitCrew ?? 70) + rng.range(-0.3, 0.3);
+    driverState.degradationPerLap = measuredWear;
+    driverState.degradationFactor = factor;
+    driverState.fuelPerLap = consumption;
+    driverState.pitLoss = pitLoss;
+    const nextMargin = Math.max(0.035, driverState.downforceMargin * 0.78);
+    const nextEstimate = circuit.downforceIdeal + rng.range(-nextMargin * 0.28, nextMargin * 0.28);
+    driverState.downforceEstimate = driverState.downforceEstimate * 0.45 + nextEstimate * 0.55;
+    driverState.downforceMargin = nextMargin;
     result = {
       type,
       label: "Simulação de corrida",
-      summary: `Ritmo de corrida estável. Degradação estimada de ${deg}% por volta no composto médio.`,
-      confidenceGain: 30,
+      summary: `Degradação estimada em ${measuredWear.toFixed(2)}% por volta no composto médio. Consumo de ${consumption.toFixed(2)} kg/volta.`,
+      confidenceGain,
       data: [
-        `Consumo estimado: ${(1.8 + circuit.abrasividade * 0.15).toFixed(2)} kg/volta`,
-        `Perda de tempo no pit lane: ~${estimatePitLoss(circuit, team.pitCrew ?? 70).toFixed(1)}s`,
-        `Vento e temperatura: ${describeWeather(createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`)[0]?.rain ?? 0)}`,
+        `Degradação medida: ${measuredWear.toFixed(2)}% por volta (médio)`,
+        `Consumo medido: ${consumption.toFixed(2)} kg/volta`,
+        `Perda no pit lane: ~${pitLoss.toFixed(1)}s`,
+        `Temperatura de pista: ${trackTemp}°C · clima: ${describeWeather(startRain)}`,
+        `Fator de desgaste para o planejador: ${factor.toFixed(2)}×`,
       ],
+      driverId: driver.driverId,
+      setup: { ...setup },
     };
   } else {
-    const soft = circuit.baseLapTime - 0.8;
-    const medium = circuit.baseLapTime + 0.15;
-    const hard = circuit.baseLapTime + 0.7;
+    const compounds = ["soft", "medium", "hard"] as const;
+    const times = {} as Record<"soft" | "medium" | "hard", number>;
+    const data: string[] = [];
+    for (const compound of compounds) {
+      const tyre = initialTyre(compound);
+      const lap = estimateLapTime({
+        circuit,
+        car: team.car,
+        driver: driver.attributes,
+        setup,
+        tyre,
+        rain: startRain,
+        fuelKg: 30,
+        fuelStartKg: 30,
+        pace: "normal",
+        tyreMode: "normal",
+      });
+      const measured = lap + rng.range(-0.08, 0.08);
+      times[compound] = measured;
+      const wear = wearPerLap(tyre, compound, "normal", "normal", driver.attributes, circuit.abrasividade, startRain, trackTemp) *
+        (1.08 - team.car.gestaoPneus * 0.0016);
+      data.push(`${compound === "soft" ? "Macio" : compound === "medium" ? "Médio" : "Duro"}: ${measured.toFixed(2)}s · desgaste ~${wear.toFixed(2)}%/volta`);
+    }
+    driverState.compoundTimes = times;
+    const fastest = compounds.reduce((best, compound) => times[compound] < times[best] ? compound : best, "soft" as typeof compounds[number]);
+    driverState.tyreInfo = `Composto mais rápido em volta: ${fastest === "soft" ? "macio" : fastest === "medium" ? "médio" : "duro"}.`;
+    const nextMargin = Math.max(0.035, driverState.downforceMargin * 0.78);
+    const nextEstimate = circuit.downforceIdeal + rng.range(-nextMargin * 0.28, nextMargin * 0.28);
+    driverState.downforceEstimate = driverState.downforceEstimate * 0.45 + nextEstimate * 0.55;
+    driverState.downforceMargin = nextMargin;
     result = {
       type,
       label: "Comparativo de compostos",
-      summary: "Macio é mais rápido em volta única; duro abre janela de uma parada.",
-      confidenceGain: 26,
-      data: [`Macio: ${soft.toFixed(2)}s`, `Médio: ${medium.toFixed(2)}s`, `Duro: ${hard.toFixed(2)}s`],
+      summary: driverState.tyreInfo,
+      confidenceGain,
+      data,
+      driverId: driver.driverId,
+      setup: { ...setup },
     };
   }
-  state.runs += 1;
-  state.confidence = Math.min(100, state.confidence + result.confidenceGain + Math.round((team.staff.engenheiro_chefe.rating - 70) / 4));
-  state.programs.push(result);
-  state.tyreInfo = type === "tyres" ? result.summary : state.tyreInfo;
+
+  driverState.runs += 1;
+  driverState.confidence = Math.min(100, driverState.confidence + result.confidenceGain + staffBonus);
+  driverState.programs.push(result);
+  state.runs = Math.max(state.runs, driverState.runs);
+  state.confidence = driverState.confidence;
+  state.programs = driverState.programs;
+  state.tyreInfo = driverState.tyreInfo;
   career.updatedAt = new Date().toISOString();
   return { ok: true, result };
 }
@@ -423,10 +634,13 @@ export function buildQualifyingInput(career: Career, type: "quali" | "sprintQual
 export function buildQualifyingSessionInput(career: Career, type: "quali" | "sprintQuali"): QualifyingSessionInput {
   const circuit = circuitOfRound(career);
   const round = currentRound(career);
-  const practiceConfidence = round.practice?.confidence ?? 35;
+  practiceFor(career);
   const confidence: Record<string, number> = {};
   for (const driver of career.drivers) {
-    confidence[driver.driverId] = career.playerTeams.includes(driver.teamId) ? practiceConfidence : 82;
+    const learned = career.playerTeams.includes(driver.teamId)
+      ? round.practice?.teams?.[driver.teamId]?.drivers[driver.driverId]?.confidence ?? 35
+      : 82;
+    confidence[driver.driverId] = learned;
   }
   return {
     id: `${career.id}:${career.roundIndex + 1}:${type}:live`,
@@ -589,6 +803,7 @@ export function migrateCareer(career: Career): Career {
   }
   for (const round of career.rounds ?? []) {
     if (round.qualifyingSession === undefined) round.qualifyingSession = null;
+    if (round.practice && round.round === career.roundIndex + 1) normalizePracticeTeams(career, round.practice);
     const circuit = CIRCUITS_2026[(round.round ?? 1) - 1] ?? CIRCUITS_2026[0];
     const startRain = createWeather(circuit, `${career.seed}:r${round.round}`)[0]?.rain ?? 0;
     round.tyreInventory = round.tyreInventory ?? {};

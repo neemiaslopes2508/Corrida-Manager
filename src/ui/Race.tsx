@@ -9,6 +9,16 @@ import { Badge, Button, TyreBadge, delta, money, ordinal } from "./Common";
 import { DriverPortrait } from "./Media";
 import { CountryFlag, WeatherIcon } from "./Visuals";
 import { TrackMap } from "./TrackMap";
+import {
+  autoControlAction,
+  canEmitAlert,
+  eventAlertCategory,
+  isAlertExpired,
+  makeRaceAlert,
+  mergeRaceAlerts,
+  type AlertMode,
+  type RaceAlert,
+} from "./raceAlerts";
 
 export function SoloRaceScreen({
   career,
@@ -109,7 +119,9 @@ export function SoloRaceScreen({
       isHost
       canControl
       finished={finished}
+      soloMode
       onPause={() => setPaused((p) => !p)}
+      onSetPaused={(value) => setPaused(value)}
       onSpeed={(s) => setSpeed(s)}
       onCommand={command}
       onFinish={() => onFinish(sessionResultFromRace(career, raceRef.current!, kind))}
@@ -163,11 +175,74 @@ export function MultiRaceScreen({
       isHost={isHost}
       canControl={isHost}
       finished={view.status === "finished"}
+      soloMode={false}
       onPause={() => onControl({ action: paused ? "resume" : "pause" })}
       onSpeed={(s) => onControl({ action: "speed", value: s })}
       onCommand={onCommand}
       onExit={onExit}
     />
+  );
+}
+
+function useRaceAlerts(view: RaceView): { alerts: RaceAlert[]; dismiss: (id: string) => void } {
+  const [alerts, setAlerts] = useState<RaceAlert[]>([]);
+  const lastEventId = useRef<number>(-1);
+  const initialized = useRef(false);
+  const lastAlertAt = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    const maxId = view.events.length > 0 ? Math.max(...view.events.map((event) => event.id)) : 0;
+    if (!initialized.current) {
+      initialized.current = true;
+      lastEventId.current = maxId;
+      return;
+    }
+    const newEvents = view.events
+      .filter((event) => event.id > lastEventId.current)
+      .sort((a, b) => a.id - b.id);
+    lastEventId.current = maxId;
+    if (newEvents.length === 0) return;
+
+    const now = Date.now();
+    for (const event of newEvents) {
+      const car = event.driverId ? view.cars.find((entry) => entry.driverId === event.driverId) : null;
+      const relevant = car ? view.playerTeams.includes(car.teamId) : false;
+      const category = eventAlertCategory(event, relevant);
+      if (!category) continue;
+      const recommendationKey = car?.strategy.recommendation?.key ?? null;
+      const alert = makeRaceAlert(event, category, recommendationKey, now);
+      if (!canEmitAlert(lastAlertAt.current.get(alert.key), now, category)) continue;
+      lastAlertAt.current.set(alert.key, now);
+      setAlerts((current) => mergeRaceAlerts(current, alert));
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setAlerts((current) => current.filter((alert) => !isAlertExpired(alert, now)));
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const dismiss = (id: string) => setAlerts((current) => current.filter((alert) => alert.id !== id));
+  return { alerts, dismiss };
+}
+
+function RaceAlertStack({ alerts, onDismiss }: { alerts: RaceAlert[]; onDismiss: (id: string) => void }) {
+  if (alerts.length === 0) return null;
+  return (
+    <div className="race-alert-stack" aria-live="polite">
+      {alerts.map((alert) => (
+        <div key={alert.id} className={`race-alert race-alert-${alert.category}`} role={alert.category === "critical" ? "alert" : "status"}>
+          <div className="race-alert-copy">
+            <span>{alert.title} · V{alert.lap}</span>
+            <strong>{alert.message}</strong>
+          </div>
+          <button type="button" className="race-alert-dismiss" aria-label="Dispensar notificação" onClick={() => onDismiss(alert.id)}>×</button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -181,7 +256,9 @@ function RaceScreen({
   isHost,
   canControl,
   finished,
+  soloMode,
   onPause,
+  onSetPaused,
   onSpeed,
   onCommand,
   onFinish,
@@ -197,7 +274,9 @@ function RaceScreen({
   isHost: boolean;
   canControl: boolean;
   finished: boolean;
+  soloMode: boolean;
   onPause: () => void;
+  onSetPaused?: (paused: boolean) => void;
   onSpeed: (s: number) => void;
   onCommand: (cmd: RaceCommand) => void;
   onFinish?: () => void;
@@ -207,6 +286,35 @@ function RaceScreen({
   const myDrivers = useMemo(() => view.cars.filter((c) => view.playerTeams.includes(c.teamId)), [view]);
   const [selected, setSelected] = useState<string | null>(myDrivers[0]?.driverId ?? view.cars[0]?.driverId ?? null);
   const [showTelemetry, setShowTelemetry] = useState(false);
+  const [alertMode, setAlertMode] = useState<AlertMode>(() => {
+    try {
+      const stored = localStorage.getItem("cm-alert-mode");
+      return stored === "notify" || stored === "slow" || stored === "pause" ? stored : "slow";
+    } catch {
+      return "slow";
+    }
+  });
+  const { alerts, dismiss } = useRaceAlerts(view);
+  const lastCriticalAlert = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!soloMode) return;
+    const critical = alerts.find((alert) => alert.category === "critical");
+    if (!critical || critical.id === lastCriticalAlert.current) return;
+    lastCriticalAlert.current = critical.id;
+    const action = autoControlAction(soloMode, alertMode, critical.category);
+    if (action === "slow" && speed !== 1) onSpeed(1);
+    else if (action === "pause" && !paused) onSetPaused?.(true);
+  }, [alerts, alertMode, paused, soloMode, speed, onSetPaused, onSpeed]);
+
+  const changeAlertMode = (mode: AlertMode) => {
+    setAlertMode(mode);
+    try {
+      localStorage.setItem("cm-alert-mode", mode);
+    } catch {
+      // Armazenamento indisponível: mantém a preferência apenas na sessão.
+    }
+  };
   const selectedCar = view.cars.find((c) => c.driverId === selected) ?? myDrivers[0] ?? view.cars[0];
   const selectedDriver = selectedCar ? DRIVER_BY_ID[selectedCar.driverId] : undefined;
   const selectedTeam = selectedCar ? TEAM_BY_ID[selectedCar.teamId] : undefined;
@@ -247,6 +355,16 @@ function RaceScreen({
               </button>
             ))}
           </div>
+          {soloMode && (
+            <label className="alert-mode-control">
+              <span>Alertas</span>
+              <select value={alertMode} onChange={(event) => changeAlertMode(event.target.value as AlertMode)}>
+                <option value="notify">Notificar</option>
+                <option value="slow">1x em crítico</option>
+                <option value="pause">Pausar crítico</option>
+              </select>
+            </label>
+          )}
           {!canControl && <span className="host-hint">Host controla pausa/velocidade</span>}
           <Button className="race-bottom-toggle" size="small" variant={showTelemetry ? "success" : "ghost"} onClick={() => setShowTelemetry((value) => !value)}>
             {showTelemetry ? "Estratégia" : "Telemetria"}
@@ -283,6 +401,7 @@ function RaceScreen({
               onSelect={setSelected}
               highlightTeams={view.playerTeams}
             />
+            <RaceAlertStack alerts={alerts} onDismiss={dismiss} />
             <div className="map-overlay">
               <span>Líder: {leader ? `${DRIVER_BY_ID[leader.driverId]?.codigo} (${leader.lap}/${view.totalLaps})` : "—"}</span>
               <span>{view.status === "finished" ? "Classificação final" : `${view.cars.filter((c) => c.status === "running").length} carros em pista`}</span>
@@ -373,6 +492,24 @@ function RaceScreen({
               <Metric label="Dano" value={`${Math.round(selectedCar.damage * 100)}%`} tone={selectedCar.damage > 0.3 ? "bad" : "good"} />
               <Metric label="Última volta" value={formatLapTime(selectedCar.lastLap)} />
               <Metric label="Melhor volta" value={formatLapTime(selectedCar.bestLap)} />
+              <Metric
+                label="Setores"
+                value={selectedCar.sectors.map((sector) => (sector == null ? "—" : formatLapTime(sector))).join(" · ")}
+              />
+              {selectedCar.penalty > 0 && (
+                <Metric
+                  label="Penalidade"
+                  value={`+${selectedCar.penalty}s${selectedCar.penaltyNotes.length ? ` · ${selectedCar.penaltyNotes[selectedCar.penaltyNotes.length - 1]}` : ""}`}
+                  tone="bad"
+                />
+              )}
+              {selectedCar.trackLimitWarnings > 0 && (
+                <Metric
+                  label="Advertências"
+                  value={`${selectedCar.trackLimitWarnings} · limites de pista`}
+                  tone="warn"
+                />
+              )}
               <Metric label="Intervalo" value={selectedCar.position === 1 ? "LÍDER" : formatGap(selectedCar.gapAhead)} />
               <Metric label="Pit stops" value={selectedCar.stops} />
               <Metric label="Ritmo" value={paceLabel(selectedCar.pace)} />

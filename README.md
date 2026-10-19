@@ -1,6 +1,12 @@
-# Corrida Manager - V1.3.3 (Fórmula 1 2026)
+# Corrida Manager - V1.3.6B (Fórmula 1 2026)
 
 Manager de Fórmula 1 jogável em português brasileiro. Inclui carreira solo de três etapas (Austrália, China com Sprint e Japão), classificação interativa Q1/Q2/Q3, planejamento de stints, corrida simulada em tempo real sobre traçados reais, gestão financeira/técnica e multiplayer autoritativo para até três jogadores humanos.
+
+A V1.3.4 adicionou disputas de ultrapassagem com alvo rastreado e eventos oficiais, marcadores interpolados ao longo do traçado, treino livre por piloto com ajuste final antes da classificação e notificações contextuais do engenheiro com prioridade e cooldown. A V1.3.5 calibra a frequência e a persistência das disputas da IA com Overtake Mode, defesa ativa, gestão de bateria e ataques sustentados, sem DRS tradicional e sem quantidades fixas de ultrapassagens. No modo solo, o jogador pode escolher notificar, reduzir para 1x ou pausar em eventos críticos; no multiplayer, pausa e velocidade continuam exclusivas do host.
+
+A V1.3.6A corrige a base de tempo da corrida: o cruzamento da linha e dos setores é interpolado dentro do tick de 0,25 s, sem reduzir o passo do motor, e os tempos passam a ser exibidos em milissegundos. A largada ganha reação, tração e qualidade individuais por piloto, determinísticas e derivadas de atributos, com largadas ruins/excelentes e efeito real na primeira volta. A ordem em pista é protegida após todos os carros atualizarem, impedindo saltos em cadeia e passes fantasmas, mas mantendo ataques e defesas reais. Limites de pista passam a gerar advertência e só viram tempo na reincidência; contato e manobra perigosa continuam distintos.
+
+A V1.3.6B aprofunda o desempenho individual e a IA. Cada piloto passa a ter ritmo por volta determinístico, com amplitude dependente de consistência e experiência, erros ocasionais e preservação de stint ligada à gestão de pneus. As disputas ganham estados de aproximação, preparação, tentativa, lado a lado, defesa e contra-ataque. Passes legítimos por velocidade relativa, pneus ou erro do rival podem acontecer sem uma tentativa anteriormente marcada; a proteção contra inversões fantasmas, saltos de dois carros e passes sob SC/VSC é preservada. A IA decide atacar, defender, recarregar energia e poupar pneus com os atributos de cada piloto, sem ordens de equipe e sem quotas fixas. A entrega é a fase B da V1.3.6; a fase C de bandeiras e incidentes permanece pendente.
 
 ## Requisitos
 

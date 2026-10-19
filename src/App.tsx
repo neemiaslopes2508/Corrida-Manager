@@ -203,8 +203,10 @@ export function App() {
       setCareer(draft);
       persistCareer(draft);
       if (action.type === "runPractice") {
-        const practice = draft.rounds[draft.roundIndex].practice;
-        const last = practice?.programs[practice.programs.length - 1];
+        const learned = action.driverId
+          ? draft.rounds[draft.roundIndex].practice?.teams?.[action.teamId]?.drivers[action.driverId]
+          : undefined;
+        const last = learned?.programs[learned.programs.length - 1];
         if (last) notify(last.summary, "success");
       }
       if (action.type === "startDevelopment") notify("Solicitação registrada no desenvolvimento.", "success");

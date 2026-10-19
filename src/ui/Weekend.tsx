@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { CIRCUITS_2026, DRIVER_BY_ID, TEAM_BY_ID } from "../data/season2026";
-import type { Career, SessionResult } from "../engine/types";
+import type { Career, PracticeDriverState, PracticeState, SessionResult } from "../engine/types";
 import type { CareerAction as Action } from "../net/protocol";
 import {
   constructorStandings,
   currentRound,
   driverStandings,
   getDriversOfTeam,
+  practiceDriverFor,
   practiceFor,
   teamState,
 } from "../engine/career";
@@ -19,6 +20,72 @@ import { CountryFlag, SprintIcon, WeatherIcon } from "./Visuals";
 import { AdminTrackMap } from "./AdminTrackMap";
 import { Championship } from "./Dashboard";
 import { RaceStrategyPlanner } from "./RaceStrategyPlanner";
+
+function driverConfidence(practice: PracticeState, teamId: string, driverId: string): number {
+  return practice.teams?.[teamId]?.drivers[driverId]?.confidence ?? practice.confidence ?? 35;
+}
+
+function SetupEditor({
+  career,
+  meTeamId,
+  drivers,
+  practice,
+  onAction,
+}: {
+  career: Career;
+  meTeamId: string;
+  drivers: ReturnType<typeof getDriversOfTeam>;
+  practice: PracticeState;
+  onAction: (action: Action) => void;
+}) {
+  const circuit = CIRCUITS_2026[career.roundIndex];
+  const round = currentRound(career);
+  return (
+    <div className="setup-driver-grid">
+      {drivers.map((driver) => {
+        const setup = round.setups[driver.driverId] ?? { downforce: circuit.downforceIdeal, focus: "balanced" as const, startingCompound: "medium" as const, fuelLoad: 1 };
+        const data = DRIVER_BY_ID[driver.driverId];
+        return (
+          <div className="setup-card setup-card-v131" key={driver.driverId}>
+            <div className="setup-driver-head">
+              <DriverPortrait driverId={driver.driverId} size="md" decorative />
+              <div>
+                <strong>#{data?.numero} {data?.nome ?? "Reserva"}</strong>
+                <span className="muted small"><CountryFlag country={data?.nacionalidade ?? ""} /> {data?.nacionalidade} · contrato {driver.contratoEtapas} etapa(s)</span>
+              </div>
+              <Badge tone="info">Confiança {driverConfidence(practice, meTeamId, driver.driverId)}%</Badge>
+            </div>
+            <label className="field">
+              <span>Downforce <strong>{Math.round(setup.downforce * 100)}%</strong></span>
+              <input type="range" min={0} max={100} value={Math.round(setup.downforce * 100)} onChange={(e) => onAction({ type: "setSetup", driverId: driver.driverId, patch: { downforce: Number(e.target.value) / 100 } })} />
+              <small className="muted">Baixa = reta; alta = curvas. A faixa ideal é revelada pelo treino.</small>
+            </label>
+            <div className="field">
+              <span>Foco do acerto</span>
+              <div className="segmented">
+                {(["qualifying", "balanced", "race"] as const).map((focus) => (
+                  <button key={focus} className={setup.focus === focus ? "active" : ""} onClick={() => onAction({ type: "setSetup", driverId: driver.driverId, patch: { focus } })}>
+                    {focus === "qualifying" ? "Classificação" : focus === "balanced" ? "Equilibrado" : "Corrida"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <span>Composto inicial</span>
+              <div className="compound-picker">
+                {(["soft", "medium", "hard", "inter", "wet"] as const).map((compound) => (
+                  <button key={compound} className={`compound-chip ${setup.startingCompound === compound ? "active" : ""}`} onClick={() => onAction({ type: "setSetup", driverId: driver.driverId, patch: { startingCompound: compound } })}>
+                    <TyreBadge compound={compound} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function PrepScreen({
   career,
@@ -37,7 +104,9 @@ export function PrepScreen({
   const drivers = getDriversOfTeam(career, meTeamId);
   const weather = useMemo(() => createWeather(circuit, `${career.seed}:r${career.roundIndex + 1}`), [career.seed, career.roundIndex, circuit.id]);
   const practice = practiceFor(career);
-  const window = 0.28 - (practice.confidence / 100) * 0.22;
+  const leadLearned = drivers[0] ? practiceDriverFor(career, meTeamId, drivers[0].driverId) : null;
+  const learnedLow = leadLearned && leadLearned.runs > 0 ? Math.max(0, leadLearned.downforceEstimate - leadLearned.downforceMargin) : null;
+  const learnedHigh = leadLearned && leadLearned.runs > 0 ? Math.min(1, leadLearned.downforceEstimate + leadLearned.downforceMargin) : null;
   const tyreInventory = round.tyreInventory?.[drivers[0]?.driverId ?? ""] ?? allocateTyreInventory(circuit.sprint);
   const pitLoss = estimatePitLoss(circuit, team.pitCrew ?? 70);
   const sessions = circuit.sprint
@@ -74,7 +143,7 @@ export function PrepScreen({
               <div><span>Voltas</span><strong>{circuit.voltas}</strong></div>
               <div><span>Extensão</span><strong>{(circuit.comprimentoM / 1000).toFixed(3)} km</strong></div>
               <div><span>Curvas</span><strong>{circuit.curvas}</strong></div>
-              <div><span>Downforce ideal</span><strong>{practice.confidence > 35 ? `${Math.round(Math.max(0, practice.idealDownforce - window) * 100)}–${Math.round(Math.min(1, practice.idealDownforce + window) * 100)}%` : "a revelar"}</strong></div>
+              <div><span>Downforce provável</span><strong>{learnedLow != null && learnedHigh != null ? `${Math.round(learnedLow * 100)}–${Math.round(learnedHigh * 100)}%` : "a revelar"}</strong></div>
               <div><span>Pit loss estimado</span><strong>~{pitLoss.toFixed(1)}s</strong></div>
             </div>
           </div>
@@ -121,49 +190,7 @@ export function PrepScreen({
             <Badge tone="info">Regra 2026</Badge>
             <p>Corrida seca exige dois compostos secos diferentes. No Sprint não há troca obrigatória. O pit stop após a entrada não pode ser cancelado.</p>
           </div>
-          <div className="setup-driver-grid">
-            {drivers.map((d) => {
-              const setup = round.setups[d.driverId] ?? { downforce: circuit.downforceIdeal, focus: "balanced" as const, startingCompound: "medium" as const, fuelLoad: 1 };
-              const data = DRIVER_BY_ID[d.driverId];
-              return (
-                <div className="setup-card setup-card-v131" key={d.driverId}>
-                  <div className="setup-driver-head">
-                    <DriverPortrait driverId={d.driverId} size="md" decorative />
-                    <div>
-                      <strong>#{data?.numero} {data?.nome ?? "Reserva"}</strong>
-                      <span className="muted small"><CountryFlag country={data?.nacionalidade ?? ""} /> {data?.nacionalidade} · contrato {d.contratoEtapas} etapa(s)</span>
-                    </div>
-                    <Badge tone="info">Confiança {practice.confidence}%</Badge>
-                  </div>
-                  <label className="field">
-                    <span>Downforce <strong>{Math.round(setup.downforce * 100)}%</strong></span>
-                    <input type="range" min={0} max={100} value={Math.round(setup.downforce * 100)} onChange={(e) => onAction({ type: "setSetup", driverId: d.driverId, patch: { downforce: Number(e.target.value) / 100 } })} />
-                    <small className="muted">Baixa = reta; alta = curvas. O ideal é revelado pelo treino.</small>
-                  </label>
-                  <div className="field">
-                    <span>Foco do acerto</span>
-                    <div className="segmented">
-                      {(["qualifying", "balanced", "race"] as const).map((f) => (
-                        <button key={f} className={setup.focus === f ? "active" : ""} onClick={() => onAction({ type: "setSetup", driverId: d.driverId, patch: { focus: f } })}>
-                          {f === "qualifying" ? "Classificação" : f === "balanced" ? "Equilibrado" : "Corrida"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="field">
-                    <span>Composto inicial</span>
-                    <div className="compound-picker">
-                      {(["soft", "medium", "hard", "inter", "wet"] as const).map((c) => (
-                        <button key={c} className={`compound-chip ${setup.startingCompound === c ? "active" : ""}`} onClick={() => onAction({ type: "setSetup", driverId: d.driverId, patch: { startingCompound: c } })}>
-                          <TyreBadge compound={c} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <SetupEditor career={career} meTeamId={meTeamId} drivers={drivers} practice={practice} onAction={onAction} />
           <div className="row-between prep-setup-footer">
             <span className="muted small">Equipe: {money(team.budget)} disponíveis · dados de treino alimentam o planejador abaixo</span>
             <Button variant="primary" onClick={() => onAction({ type: "enterPractice" })} disabled={!isHost}>Iniciar treino livre</Button>
@@ -182,7 +209,7 @@ export function PrepScreen({
         </Panel>
       </div>
 
-      <RaceStrategyPlanner career={career} onAction={onAction} />
+      <RaceStrategyPlanner career={career} onAction={onAction} practice={practice} />
     </div>
   );
 }
@@ -200,63 +227,118 @@ export function PracticeScreen({
 }) {
   const circuit = CIRCUITS_2026[career.roundIndex];
   const state = practiceFor(career);
+  const drivers = getDriversOfTeam(career, meTeamId);
+  const [selectedDriverId, setSelectedDriverId] = useState(drivers[0]?.driverId ?? "");
+  const [confirming, setConfirming] = useState(false);
+  const selectedDriver = drivers.find((driver) => driver.driverId === selectedDriverId) ?? drivers[0];
+  const learned = selectedDriver ? practiceDriverFor(career, meTeamId, selectedDriver.driverId) : null;
   const programs = [
-    { id: "qualifying" as const, title: "Simulação de classificação", desc: "Revela a janela de downforce e o potencial em volta rápida." },
-    { id: "race" as const, title: "Simulação de corrida", desc: "Estima degradação, consumo e perda no pit lane." },
+    { id: "qualifying" as const, title: "Simulação de classificação", desc: "Mede a volta rápida e estreita a faixa provável de downforce." },
+    { id: "race" as const, title: "Simulação de corrida", desc: "Mede degradação, consumo e perda no pit lane com o acerto atual." },
     { id: "tyres" as const, title: "Comparativo de pneus", desc: "Compara macio, médio e duro em ritmo de corrida." },
   ];
+  const runs = learned?.runs ?? 0;
+  const confidence = learned?.confidence ?? 35;
+  const windowLow = learned && learned.runs > 0 ? Math.max(0, learned.downforceEstimate - learned.downforceMargin) : null;
+  const windowHigh = learned && learned.runs > 0 ? Math.min(1, learned.downforceEstimate + learned.downforceMargin) : null;
+  const driverName = selectedDriver ? DRIVER_BY_ID[selectedDriver.driverId]?.sobrenome ?? selectedDriver.driverId : "—";
   return (
     <div className="weekend">
       <div className="weekend-head">
         <div>
           <span className="kicker">Treino livre · {circuit.gp}</span>
           <h1>Programa de treino</h1>
-          <p className="muted">Três programas disponíveis. Cada um aumenta a confiança do acerto e revela dados.</p>
+          <p className="muted">Cada piloto tem três programas. Use os dados para ajustar o carro antes da classificação.</p>
         </div>
         <div className="weekend-actions">
-          <Badge tone="info">Confiança {state.confidence}%</Badge>
-          <Button variant="primary" onClick={() => onAction({ type: "finishPractice" })} disabled={!isHost}>
-            {circuit.sprint ? "Ir para Classificação Sprint" : "Ir para a classificação"}
+          <Badge tone="info">Confiança {confidence}%</Badge>
+          <Button variant="primary" onClick={() => setConfirming(true)} disabled={!isHost}>
+            {circuit.sprint ? "Revisar e ir para Classificação Sprint" : "Revisar e ir para a classificação"}
           </Button>
         </div>
       </div>
+
+      {confirming && (
+        <Panel title="Confirmar conclusão do treino" subtitle="A classificação começa imediatamente após a confirmação">
+          <p className="muted small">
+            {runs === 0
+              ? "Nenhum programa foi executado para o piloto selecionado. A confiança-base é 35% e o acerto permanece na faixa inicial."
+              : "Serão levados para a classificação a confiança e o acerto atuais de cada piloto da equipe."}
+          </p>
+          <div className="row-between">
+            <Button variant="ghost" onClick={() => setConfirming(false)}>Voltar ao treino</Button>
+            <Button variant="primary" onClick={() => { setConfirming(false); onAction({ type: "finishPractice" }); }}>
+              {circuit.sprint ? "Confirmar e iniciar Classificação Sprint" : "Confirmar e iniciar classificação"}
+            </Button>
+          </div>
+        </Panel>
+      )}
+
       <div className="practice-grid">
-        <Panel title="Programas" subtitle={`${state.runs}/3 programas executados`}>
-          {programs.map((p) => (
-            <div className="program-card" key={p.id}>
+        <Panel title="Programas por piloto" subtitle={`${runs}/3 programas executados para ${driverName}`}>
+          <div className="tabs small practice-driver-tabs">
+            {drivers.map((driver) => {
+              const data = DRIVER_BY_ID[driver.driverId];
+              const driverState = practiceDriverFor(career, meTeamId, driver.driverId);
+              return (
+                <button key={driver.driverId} className={selectedDriver?.driverId === driver.driverId ? "active" : ""} onClick={() => setSelectedDriverId(driver.driverId)}>
+                  {data?.codigo ?? driver.driverId} · {driverState?.confidence ?? 35}%
+                </button>
+              );
+            })}
+          </div>
+          {programs.map((program) => (
+            <div className="program-card" key={program.id}>
               <div>
-                <strong>{p.title}</strong>
-                <p className="muted small">{p.desc}</p>
+                <strong>{program.title}</strong>
+                <p className="muted small">{program.desc}</p>
               </div>
-              <Button variant="subtle" size="small" disabled={state.runs >= 3} onClick={() => onAction({ type: "runPractice", program: p.id, teamId: meTeamId })}>
-                Rodar
+              <Button
+                variant="subtle"
+                size="small"
+                disabled={!selectedDriver || runs >= 3}
+                onClick={() => selectedDriver && onAction({ type: "runPractice", program: program.id, teamId: meTeamId, driverId: selectedDriver.driverId })}
+              >
+                {runs >= 3 ? "Concluído" : "Rodar"}
               </Button>
             </div>
           ))}
           <div className="confidence-box">
-            <span>Confiança do acerto</span>
-            <Bar value={state.confidence} color="#4ade80" label={`${state.confidence}%`} />
-            <small className="muted">Mais confiança reduz o erro de acerto e melhora a previsão do downforce ideal.</small>
+            <span>Confiança do acerto · {driverName}</span>
+            <Bar value={confidence} color="#4ade80" label={`${confidence}%`} />
+            <small className="muted">Mais confiança estreita a faixa provável e reduz o erro de acerto na classificação.</small>
           </div>
-          {!isHost && <p className="muted small">Somente o host avança para a classificação. Você ainda pode rodar programas da sua equipe.</p>}
+          {!isHost && <p className="muted small">Somente o host avança para a classificação. Você ainda pode rodar os programas da sua equipe.</p>}
         </Panel>
-        <Panel title="Dados coletados" subtitle="Telemetria simplificada">
-          {state.programs.length === 0 && <Empty>Nenhum programa executado.</Empty>}
-          {state.programs.map((p, i) => (
-            <div className="program-result" key={i}>
-              <div className="row-between"><strong>{p.label}</strong><Badge tone="good">+{p.confidenceGain}%</Badge></div>
-              <p>{p.summary}</p>
-              <ul>{p.data.map((d, j) => <li key={j}>{d}</li>)}</ul>
+
+        <Panel title="Dados coletados" subtitle={`Telemetria de ${driverName}`}>
+          {!learned || learned.programs.length === 0 ? <Empty>Nenhum programa executado para este piloto.</Empty> : learned.programs.map((program, index) => (
+            <div className="program-result" key={`${program.type}-${index}`}>
+              <div className="row-between"><strong>{program.label}</strong><Badge tone="good">+{program.confidenceGain}%</Badge></div>
+              <p>{program.summary}</p>
+              <ul>{program.data.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}</ul>
             </div>
           ))}
           <div className="divider" />
-          <h4>Janela de acerto</h4>
+          <h4>Faixa provável de acerto</h4>
           <p className="muted small">
-            {state.confidence < 35 ? "Rode a simulação de classificação para revelar o downforce ideal." : `Downforce ideal estimado: ${Math.round(state.idealDownforce * 100)}%.`}
+            {windowLow == null || windowHigh == null
+              ? "Ainda não medida. Rode um programa para estimar a janela de downforce."
+              : `Downforce provável: ${Math.round(windowLow * 100)}%–${Math.round(windowHigh * 100)}% · precisão ±${Math.round((learned?.downforceMargin ?? 0) * 100)} p.p.`}
           </p>
+          {learned?.degradationPerLap != null && (
+            <p className="muted small">Degradação medida: {learned.degradationPerLap.toFixed(2)}%/volta · consumo {learned.fuelPerLap?.toFixed(2)} kg/volta · pit ~{learned.pitLoss?.toFixed(1)}s.</p>
+          )}
+          {learned?.tyreInfo && <p className="muted small">{learned.tyreInfo}</p>}
           <p className="muted small">{state.weatherForecast}</p>
         </Panel>
       </div>
+
+      <Panel title="Ajuste final" subtitle="Altere o acerto depois de analisar os dados; a classificação usará estes valores">
+        <SetupEditor career={career} meTeamId={meTeamId} drivers={drivers} practice={state} onAction={onAction} />
+      </Panel>
+
+      <RaceStrategyPlanner career={career} onAction={onAction} practice={state} />
     </div>
   );
 }

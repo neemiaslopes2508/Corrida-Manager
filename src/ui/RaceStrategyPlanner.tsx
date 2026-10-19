@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { Career, Compound, RaceStrategyPlan } from "../engine/types";
+import type { Career, Compound, PracticeState, RaceStrategyPlan } from "../engine/types";
 import type { CareerAction as Action } from "../net/protocol";
 import { currentRound, getDriversOfTeam, teamState } from "../engine/career";
 import { CIRCUITS_2026 } from "../data/season2026";
@@ -14,9 +14,11 @@ const COMPOUNDS_DRY: Compound[] = ["soft", "medium", "hard"];
 export function RaceStrategyPlanner({
   career,
   onAction,
+  practice,
 }: {
   career: Career;
   onAction: (action: Action) => void;
+  practice?: PracticeState;
 }) {
   const circuit = CIRCUITS_2026[career.roundIndex];
   const round = currentRound(career);
@@ -51,6 +53,7 @@ export function RaceStrategyPlanner({
             }),
             circuit.voltas,
           );
+          const learned = practice?.teams?.[driver.teamId]?.drivers[driver.driverId];
           const projection = projectRaceStrategy({
             plan,
             circuit: circuit,
@@ -62,6 +65,7 @@ export function RaceStrategyPlanner({
             airTemp: weather[0]?.airTemp ?? 25,
             pitCrew: team.pitCrew ?? 70,
             inventory,
+            degradationFactor: learned?.degradationFactor,
           });
           const validation = validateRacePlan(plan, circuit.voltas, true, startRain < 0.15, inventory);
           const pitLoss = estimatePitLoss(circuit, team.pitCrew ?? 70);
@@ -157,6 +161,9 @@ export function RaceStrategyPlanner({
                 <div><span>Pit loss</span><strong>{pitLoss.toFixed(1)}s</strong></div>
                 <div><span>Desgaste máx.</span><strong className={projection.risk > 0.6 ? "text-bad" : "text-good"}>{Math.round(Math.max(...projection.stints.map((stint) => stint.endWear)))}%</strong></div>
                 <div><span>Risco</span><strong className={projection.risk > 0.6 ? "text-bad" : "text-good"}>{projection.risk > 0.6 ? "Alto" : projection.risk > 0.35 ? "Médio" : "Baixo"}</strong></div>
+                {learned?.degradationPerLap != null && (
+                  <div><span>Treino</span><strong>{learned.degradationPerLap.toFixed(2)}%/v · {learned.fuelPerLap?.toFixed(2)} kg/v</strong></div>
+                )}
                 <div><span>Jogos</span><strong>{inventory ? `${inventory.soft}S ${inventory.medium}M ${inventory.hard}H` : "�"}</strong></div>
               </div>
               {!validation.ok && <p className="plan-warning">{validation.error}</p>}

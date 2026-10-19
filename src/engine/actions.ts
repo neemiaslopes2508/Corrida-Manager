@@ -50,7 +50,7 @@ export function dispatchCareerAction(career: Career, action: CareerAction, actor
     }
     case "runPractice": {
       if (!actorTeams.includes(action.teamId)) return { ok: false, error: "Sem permissão sobre esta equipe." };
-      return runPractice(career, action.program, action.teamId);
+      return runPractice(career, action.program, action.teamId, action.driverId);
     }
     case "finishPractice":
       if (career.phase !== "practice") return { ok: false, error: "Fase inválida." };
