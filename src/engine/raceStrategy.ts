@@ -489,7 +489,7 @@ export interface RecommendationContext {
   energy: number;
   rain: number;
   nextRainLap: number;
-  trackStatus: "green" | "sc" | "vsc" | "chequered";
+  trackStatus: "green" | "yellow" | "sc" | "vsc" | "red" | "chequered";
   undercutRisk: number;
   rivalPlannedStop: boolean;
   pitLoss: number;

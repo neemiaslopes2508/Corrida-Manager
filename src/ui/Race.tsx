@@ -380,8 +380,20 @@ function RaceScreen({
         <div className={`track-banner banner-${trackStatus}`}>
           {trackStatus === "sc"
             ? `SAFETY CAR — ritmo controlado e ultrapassagens proibidas${view.trackStatusUntilLap ? ` · até a volta ${view.trackStatusUntilLap}` : ""}`
-            : `VIRTUAL SAFETY CAR — ritmo reduzido${view.trackStatusUntilLap ? ` · até a volta ${view.trackStatusUntilLap}` : ""}`}
+            : trackStatus === "vsc"
+              ? `VIRTUAL SAFETY CAR — ritmo reduzido${view.trackStatusUntilLap ? ` · até a volta ${view.trackStatusUntilLap}` : ""}`
+              : trackStatus === "red"
+                ? `BANDEIRA VERMELHA — corrida suspensa${view.redFlagReason ? ` · ${view.redFlagReason}` : ""}`
+                : `AMARELA — setores ${view.yellowSectors.map((zone) => `S${zone.sector}`).join(", ")}`}
         </div>
+      )}
+      {trackStatus === "green" && !finished && view.yellowSectors.length > 0 && (
+        <div className="track-banner banner-yellow">
+          AMARELA LOCAL — {view.yellowSectors.map((zone) => `S${zone.sector}: ${zone.cause}`).join(" · ")}
+        </div>
+      )}
+      {trackStatus === "green" && !finished && view.restartUntil > view.elapsed && (
+        <div className="track-banner banner-restart">RELARGADA — ultrapassagens proibidas</div>
       )}
       {finished && (
         <div className="track-banner banner-finished">
@@ -490,6 +502,7 @@ function RaceScreen({
               <Metric label="Energia" value={`${Math.round(selectedCar.energy)}%`} tone={selectedCar.energy < 15 ? "bad" : "good"} />
               <Metric label="Combustível" value={`${selectedCar.fuelKg.toFixed(1)} kg`} />
               <Metric label="Dano" value={`${Math.round(selectedCar.damage * 100)}%`} tone={selectedCar.damage > 0.3 ? "bad" : "good"} />
+              {selectedCar.blueFlag && <Metric label="Bandeira" value="AZUL · facilitar passagem" tone="warn" />}
               <Metric label="Última volta" value={formatLapTime(selectedCar.lastLap)} />
               <Metric label="Melhor volta" value={formatLapTime(selectedCar.bestLap)} />
               <Metric
@@ -650,7 +663,14 @@ function Metric({ label, value, tone }: { label: string; value: React.ReactNode;
 }
 
 function statusText(status: string): string {
-  return { green: "Pista verde", sc: "Safety Car", vsc: "VSC", chequered: "Bandeirada" }[status] ?? status;
+  return {
+    green: "Pista verde",
+    yellow: "Amarela local",
+    sc: "Safety Car",
+    vsc: "VSC",
+    red: "Bandeira vermelha",
+    chequered: "Bandeirada",
+  }[status] ?? status;
 }
 
 function paceLabel(p: PaceMode): string {

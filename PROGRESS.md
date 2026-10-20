@@ -1,4 +1,4 @@
-# Checkpoint de desenvolvimento — V1.3.6B
+# Checkpoint de desenvolvimento — V1.3.6C
 
 Atualizado em 2026-10-19.
 
@@ -63,6 +63,17 @@ Atualizado em 2026-10-19.
 - V1.3.6B: variabilidade de ritmo por volta com desvio mediano de 0,0023–0,0024; holdout (6 seeds) confirmou 27,2–32,2 passes por corrida, 4,5–11,4% de mudança líquida na primeira volta e 6,2–9,5 passes na primeira volta.
 - V1.3.6B: `typecheck`, 76 testes, build, `check:media` e `/api/health` 1.3.6B aprovados; versão `1.3.6-b` no `package.json` (semver) e identificação `V1.3.6B` no servidor e documentação.
 - V1.3.6B: a fase C de bandeiras e incidentes não foi implementada nesta entrega.
+- V1.3.6C: amarelas locais por setor, com causa, duração, redução de ritmo, proibição de ultrapassagens na zona e liberação; a pista não é neutralizada por inteiro.
+- V1.3.6C: Safety Car com agrupamento progressivo e ritmo do líder controlado; VSC com redução de ritmo e preservação aproximada de intervalos; ambos bloqueiam passes e usam relargada com ordem preservada.
+- V1.3.6C: bandeira vermelha congela o relógio esportivo, os carros e a ordem; a retomada é simplificada (sem intervenção nos carros/pneus), com relargada curta e proibição de passes.
+- V1.3.6C: bandeira azul identifica retardatários sob pressão de um carro com mais voltas, reduz o ritmo e facilita a passagem sem teleporte; passes sobre retardatários não são contabilizados como ganho de posição.
+- V1.3.6C: incidentes graduais de saída de pista, barreira, contato, pneu furado e falha mecânica; dano reduz ritmo, pode ser reparado nos boxes com tempo extra ou evoluir para abandono. Frequência de incidentes permaneceu no patamar da V1.3.6B.
+- V1.3.6C: interface existente mostra setores amarelos, SC/VSC, bandeira vermelha, relargada, bandeira azul e dano; alertas de solo/multiplayer preservam as preferências e o controle do host.
+- V1.3.6C: calibração (10 seeds): 29,6/31,5/36,6 passes por corrida em Melbourne/Xangai/Suzuka (medianas 31,5/32/36,5; p90 47/41/51), contra 35,8/39,4/27,5 na V1.3.6B. Primeira volta: 8,6/12,3/4,5% de mudança líquida.
+- V1.3.6C: por corrida, amarelas locais 4,6/6,5/5,5; SC 0,5/0,9/0,7; VSC 0,2/0,2/0; bandeira vermelha 0/0/0,1; passes sob amarela/SC/VSC 0. Abandonos 0,8/1,1/1,3; reparos 4,3/5,0/4,8; carros danificados 2,2/3,9/2,8.
+- V1.3.6C: holdout (6 seeds): 31,3/26,7/30,2 passes em média (medianas 21/23,5/28,5; um evento atípico de 80 passes em corrida com 3 abandonos e 2 Safety Cars), 5,3–6,3 amarelas, 0,3–1,2 SC, 0–0,3 VSC e 0–0,2 vermelha por corrida; nenhum passe sob bandeira.
+- V1.3.6C: `typecheck`, 85 testes, build, `check:media` e `/api/health` 1.3.6C aprovados; versão `1.3.6-c` no `package.json` (semver) e identificação `V1.3.6C` no servidor e documentação.
+- V1.3.6C: simplificações documentadas: bandeira vermelha sem intervenção/troca de pneus e com relargada parada a partir das posições; amarela local proíbe qualquer passe na zona, sem exceções para carro parado; bandeiras azuis dependem de retardatários efetivos.
 - Carreira solo completa (Austrália, China com Sprint, Japão) via UI, com campeões.
 - Corrida ao vivo com mapa SVG, marcadores, torre, telemetria, estratégia e feed.
 - Pit stops, compostos, penalidades, Safety Car e clima em execução.

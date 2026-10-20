@@ -36,7 +36,12 @@ export function eventAlertCategory(event: RaceEvent, relevant: boolean): RaceAle
   switch (event.type) {
     case "sc":
     case "vsc":
+    case "red":
       return "critical";
+    case "yellow":
+      return "important";
+    case "blue":
+      return relevant ? "important" : null;
     case "weather":
       return "important";
     case "retirement":
@@ -70,6 +75,12 @@ export function eventAlertTitle(event: RaceEvent): string {
       return "Safety Car";
     case "vsc":
       return "Virtual Safety Car";
+    case "red":
+      return "Bandeira vermelha";
+    case "yellow":
+      return "Amarela local";
+    case "blue":
+      return "Bandeira azul";
     case "weather":
       return "Mudança de clima";
     case "retirement":

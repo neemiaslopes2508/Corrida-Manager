@@ -1,6 +1,6 @@
 {
   "name": "corrida-manager",
-  "version": "1.3.6-b",
+  "version": "1.3.6-c",
   "private": true,
   "type": "module",
   "description": "Corrida Manager — manager de Fórmula 1 2026 jogável (solo e multiplayer).",

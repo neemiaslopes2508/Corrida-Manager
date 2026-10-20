@@ -25,6 +25,10 @@ describe("alertas contextuais V1.3.4", () => {
     expect(eventAlertCategory(event({ id: 1, type: "sc", message: "SC" }), false)).toBe("critical");
     expect(eventAlertCategory(event({ id: 2, type: "incident", message: "Pneu furado", severity: "danger" }), true)).toBe("critical");
     expect(eventAlertCategory(event({ id: 3, type: "incident", message: "Pneu furado", severity: "danger" }), false)).toBeNull();
+    expect(eventAlertCategory(event({ id: 7, type: "red", message: "Bandeira vermelha", severity: "danger" }), false)).toBe("critical");
+    expect(eventAlertCategory(event({ id: 8, type: "yellow", message: "Amarela setor 2", severity: "warn" }), false)).toBe("important");
+    expect(eventAlertCategory(event({ id: 9, type: "blue", message: "Bandeira azul", severity: "warn" }), true)).toBe("important");
+    expect(eventAlertCategory(event({ id: 10, type: "blue", message: "Bandeira azul", severity: "warn" }), false)).toBeNull();
     expect(eventAlertCategory(event({ id: 4, type: "weather", message: "Chuva", severity: "warn" }), false)).toBe("important");
     expect(eventAlertCategory(event({ id: 5, type: "penalty", message: "+5s", severity: "warn" }), true)).toBe("important");
     expect(eventAlertCategory(event({ id: 6, type: "fastest", message: "VL", severity: "success" }), true)).toBeNull();

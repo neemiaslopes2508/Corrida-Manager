@@ -417,8 +417,10 @@ li { margin: 3px 0; }
 .race-meta > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .status-pill { padding: 2px 8px; border-radius: 99px; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 .status-green { background: rgba(74, 222, 128, 0.12); color: var(--good); }
+.status-yellow { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
 .status-sc { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
 .status-vsc { background: rgba(251, 191, 36, 0.12); color: #fcd34d; }
+.status-red { background: rgba(248, 113, 113, 0.18); color: #fca5a5; }
 .status-chequered { background: rgba(255,255,255,0.1); color: #ddd; }
 .race-scoreboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .race-scoreboard > div { background: #10161f; border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; display: flex; flex-direction: column; }
@@ -435,6 +437,9 @@ li { margin: 3px 0; }
 .track-banner { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; flex: none; }
 .banner-sc { background: #f5c542; color: #1a1505; }
 .banner-vsc { background: #b58b2b; color: #150f02; }
+.banner-yellow { background: rgba(245, 197, 66, 0.92); color: #1a1505; }
+.banner-red { background: #b91c1c; color: #fff; }
+.banner-restart { background: rgba(74, 222, 128, 0.16); border: 1px solid rgba(74, 222, 128, 0.35); color: #d8ffe7; }
 .banner-finished { background: linear-gradient(90deg, #183c28, #0f1b14); border: 1px solid #2f6e49; color: #d8ffe7; }
 .paused-banner { text-align: center; background: rgba(110, 168, 254, 0.14); border: 1px solid rgba(110, 168, 254, 0.3); color: #bcd6ff; border-radius: 6px; padding: 3px; font-size: 11px; font-weight: 700; flex: none; }
 .race-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(340px, 0.95fr); gap: 8px; align-items: stretch; }

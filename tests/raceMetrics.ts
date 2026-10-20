@@ -1,4 +1,6 @@
+import { CIRCUIT_BY_ID } from "../src/data/season2026";
 import { advanceRace } from "../src/engine/race";
+import { buildTrack, sectorOf } from "../src/engine/track";
 import type { RaceState } from "../src/engine/types";
 
 /**
@@ -56,6 +58,17 @@ export interface V136Metrics {
   penalties: PenaltySample[];
   penaltyByKind: Record<string, number>;
   scPasses: number;
+  yellowEvents: number;
+  scEvents: number;
+  vscEvents: number;
+  redEvents: number;
+  blueFlags: number;
+  incidents: number;
+  retirements: number;
+  repairEvents: number;
+  yellowPasses: number;
+  maxDamage: number;
+  damagedCars: number;
 }
 
 function classifyPenalty(message: string): PenaltySample["kind"] {
@@ -95,6 +108,15 @@ export function simulateWithMetrics(state: RaceState, maxTicks = 120_000): V136M
   const lapTimeByDriver: Record<string, number[]> = {};
   const previousLap = new Map(state.cars.map((car) => [car.driverId, car.lap]));
   let scPasses = 0;
+  let yellowEvents = 0;
+  let scEvents = 0;
+  let vscEvents = 0;
+  let redEvents = 0;
+  let blueFlags = 0;
+  let incidents = 0;
+  let retirements = 0;
+  let repairEvents = 0;
+  let yellowPasses = 0;
   let firstLapSamples = 0;
   let firstLapChanged = 0;
   let firstLapGained = 0;
@@ -146,10 +168,33 @@ export function simulateWithMetrics(state: RaceState, maxTicks = 120_000): V136M
         if (kind === "mistake") mistakePasses += 1;
         if (event.counterAttack) counterPasses += 1;
         if (state.trackStatus !== "green") scPasses += 1;
+        if (state.yellowZones.length > 0) {
+          const circuit = CIRCUIT_BY_ID[state.circuitId];
+          const track = circuit ? buildTrack(circuit) : null;
+          const passer = state.cars.find((car) => car.driverId === event.driverId);
+          const passed = state.cars.find((car) => car.driverId === event.passedDriverId);
+          if (track && passer && passed) {
+            const passerSector = sectorOf(track, passer.distance);
+            const passedSector = sectorOf(track, passed.distance);
+            if (
+              state.yellowZones.some((zone) => zone.sector === passerSector || zone.sector === passedSector)
+            ) {
+              yellowPasses += 1;
+            }
+          }
+        }
       }
       if (event.type === "penalty") {
         penalties.push({ driverId: event.driverId ?? "", lap: event.lap, kind: classifyPenalty(event.message), penalty: 5 });
       }
+      if (event.type === "yellow") yellowEvents += 1;
+      if (event.type === "sc") scEvents += 1;
+      if (event.type === "vsc") vscEvents += 1;
+      if (event.type === "red") redEvents += 1;
+      if (event.type === "blue") blueFlags += 1;
+      if (event.type === "incident") incidents += 1;
+      if (event.type === "retirement") retirements += 1;
+      if (event.type === "pit" && event.message.includes("reparo")) repairEvents += 1;
       if (event.type === "info" && event.message.includes("Advertência")) warnings += 1;
     }
     if (!firstLapRecorded && state.leaderLap >= 1) {
@@ -184,6 +229,8 @@ export function simulateWithMetrics(state: RaceState, maxTicks = 120_000): V136M
   const reactions = launches.map((launch) => launch.reaction);
   const sideBySideTicks = state.cars.reduce((total, car) => total + car.sideBySideTicks, 0);
   const defendedAttempts = state.cars.reduce((total, car) => total + car.defendedAttempts, 0);
+  const maxDamage = Math.max(0, ...state.cars.map((car) => car.damage));
+  const damagedCars = state.cars.filter((car) => car.damage > 0.05).length;
   return {
     totalLaps: state.totalLaps,
     lapSamples,
@@ -219,5 +266,16 @@ export function simulateWithMetrics(state: RaceState, maxTicks = 120_000): V136M
     penalties,
     penaltyByKind,
     scPasses,
+    yellowEvents,
+    scEvents,
+    vscEvents,
+    redEvents,
+    blueFlags,
+    incidents,
+    retirements,
+    repairEvents,
+    yellowPasses,
+    maxDamage,
+    damagedCars,
   };
 }

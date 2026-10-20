@@ -4,7 +4,7 @@ export type Compound = "soft" | "medium" | "hard" | "inter" | "wet";
 export type PaceMode = "conserve" | "normal" | "attack";
 export type EnergyMode = "save" | "normal" | "push";
 export type TyreMode = "manage" | "normal" | "push";
-export type TrackStatus = "green" | "sc" | "vsc" | "chequered";
+export type TrackStatus = "green" | "yellow" | "sc" | "vsc" | "red" | "chequered";
 export type CarStatus = "running" | "finished" | "retired";
 export type PitState = "none" | "entering" | "service" | "exiting";
 
@@ -177,6 +177,7 @@ export interface RaceCar {
   counterUntil: number;
   sideBySideTicks: number;
   defendedAttempts: number;
+  blueFlag: boolean;
   lap: number; // voltas completadas
   status: CarStatus;
   finishTime: number | null;
@@ -235,6 +236,9 @@ export interface RaceEvent {
     | "retirement"
     | "sc"
     | "vsc"
+    | "yellow"
+    | "blue"
+    | "red"
     | "green"
     | "weather"
     | "penalty"
@@ -245,6 +249,7 @@ export interface RaceEvent {
   driverId?: string;
   severity: "info" | "warn" | "danger" | "success";
   adviceKey?: string;
+  sector?: number;
   passedDriverId?: string;
   attackSuccess?: boolean;
   passKind?: PassKind;
@@ -267,6 +272,14 @@ export interface FastestLap {
   time: number;
 }
 
+export interface LocalYellow {
+  sector: number;
+  cause: string;
+  driverId?: string;
+  untilElapsed: number;
+  untilLap: number;
+}
+
 export interface RaceState {
   seed: string;
   rngState: number;
@@ -281,6 +294,10 @@ export interface RaceState {
   trackStatus: TrackStatus;
   trackStatusUntil: number;
   trackStatusUntilLap: number | null;
+  yellowZones: LocalYellow[];
+  redFlagTicks: number;
+  redFlagReason: string | null;
+  restartUntil: number;
   weather: RaceWeather;
   cars: RaceCar[];
   teams: TeamRaceSpec[];
@@ -343,6 +360,7 @@ export interface RaceCarView {
   penalty: number;
   penaltyNotes: string[];
   trackLimitWarnings: number;
+  blueFlag: boolean;
   damage: number;
   stops: number;
   overtakeMode: boolean;
@@ -362,6 +380,9 @@ export interface RaceView {
   status: "running" | "finished";
   trackStatus: TrackStatus;
   trackStatusUntilLap: number | null;
+  yellowSectors: Array<{ sector: number; cause: string; untilLap: number }>;
+  redFlagReason: string | null;
+  restartUntil: number;
   weather: RaceWeather;
   cars: RaceCarView[];
   events: RaceEvent[];

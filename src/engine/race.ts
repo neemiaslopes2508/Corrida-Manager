@@ -1,7 +1,7 @@
 import type { CircuitData } from "../data/season2026";
 import { CIRCUIT_BY_ID } from "../data/season2026";
 import { createRng } from "./rng";
-import { buildTrack, wrapDistance, sampleAt, type TrackModel } from "./track";
+import { buildTrack, wrapDistance, sampleAt, sectorOf, type TrackModel } from "./track";
 import {
   COMPOUNDS,
   compoundForConditions,
@@ -37,6 +37,7 @@ import type {
   CarSetup,
   Compound,
   DriverRaceSpec,
+  LocalYellow,
   PaceMode,
   PassKind,
   RaceCar,
@@ -309,6 +310,7 @@ export function createRaceState(config: RaceConfig): RaceState {
       counterUntil: 0,
       sideBySideTicks: 0,
       defendedAttempts: 0,
+      blueFlag: false,
       lap: 0,
       status: "running",
       finishTime: null,
@@ -376,6 +378,10 @@ export function createRaceState(config: RaceConfig): RaceState {
     trackStatus: config.initialTrackStatus ?? "green",
     trackStatusUntil: 0,
     trackStatusUntilLap: null,
+    yellowZones: [],
+    redFlagTicks: 0,
+    redFlagReason: null,
+    restartUntil: 0,
     weather: {
       rain: startRain,
       condition: describeWeather(startRain),
@@ -435,6 +441,7 @@ function addEvent(
   driverId?: string,
   severity: RaceEvent["severity"] = "info",
   adviceKey?: string,
+  sector?: number,
 ): void {
   state.events.push({
     id: state.nextEventId++,
@@ -446,6 +453,7 @@ function addEvent(
     driverId,
     severity,
     adviceKey,
+    sector,
   });
   if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
 }
@@ -507,6 +515,10 @@ function advanceStint(state: RaceState, car: RaceCar, circuit: CircuitData): voi
 
 function ensureRaceState(state: RaceState): void {
   if (state.trackStatusUntilLap === undefined) state.trackStatusUntilLap = null;
+  if (!state.yellowZones) state.yellowZones = [];
+  if (state.redFlagTicks == null) state.redFlagTicks = 0;
+  if (state.redFlagReason === undefined) state.redFlagReason = null;
+  if (state.restartUntil == null) state.restartUntil = 0;
   for (const car of state.cars) {
     if (!car.tyreInventory) car.tyreInventory = allocateTyreInventory(state.isSprint);
     if (!car.strategy || !car.strategy.plan) {
@@ -549,6 +561,7 @@ function ensureRaceState(state: RaceState): void {
     if (car.attackStartedAt === undefined) car.attackStartedAt = null;
     if (car.overtakeAttempts === undefined) car.overtakeAttempts = 0;
     if (car.attackAttempts === undefined) car.attackAttempts = 0;
+    if (car.blueFlag == null) car.blueFlag = false;
     if (car.attacking && !car.targetDriverId) car.attacking = false;
     // compatibilidade com saves anteriores à V1.3.6A
     if (car.launchReaction == null) car.launchReaction = 0;
@@ -658,6 +671,7 @@ interface RaceOrderSnapshot {
   running: Set<string>;
   rank: Map<string, number>;
   aheadId: Map<string, string | null>;
+  physicalAheadId: Map<string, string | null>;
   pit: Map<string, boolean>;
   lap: Map<string, number>;
   distance: Map<string, number>;
@@ -667,10 +681,12 @@ function captureRaceOrder(state: RaceState): RaceOrderSnapshot {
   const running = state.cars
     .filter((car) => car.status === "running")
     .sort((a, b) => a.position - b.position);
+  const physical = orderCarsOnTrack(state.cars);
   return {
     running: new Set(running.map((car) => car.driverId)),
     rank: new Map(running.map((car, index) => [car.driverId, index])),
     aheadId: new Map(running.map((car, index) => [car.driverId, index > 0 ? running[index - 1].driverId : null])),
+    physicalAheadId: new Map(physical.map((car, index) => [car.driverId, index > 0 ? physical[index - 1].driverId : null])),
     pit: new Map(state.cars.map((car) => [car.driverId, car.pit.state !== "none"])),
     lap: new Map(state.cars.map((car) => [car.driverId, car.lap])),
     distance: new Map(state.cars.map((car) => [car.driverId, car.distance])),
@@ -699,10 +715,12 @@ function endAttack(car: RaceCar, cooldown: number): void {
  */
 function enforceFollowingOrder(state: RaceState, before: RaceOrderSnapshot): void {
   const backoff = state.leaderLap === 0 ? 3.5 : 2.5;
+  const track = buildTrack(circuitStub(state));
+  const neutralized = state.trackStatus !== "green" || state.elapsed < state.restartUntil;
   for (const driverId of before.running) {
     const car = state.cars.find((entry) => entry.driverId === driverId);
     if (!car || car.status !== "running" || car.pit.state !== "none") continue;
-    const aheadId = before.aheadId.get(driverId);
+    const aheadId = before.physicalAheadId.get(driverId);
     if (!aheadId) continue;
     const ahead = state.cars.find((entry) => entry.driverId === aheadId);
     if (!ahead || ahead.status !== "running" || ahead.pit.state !== "none" || ahead.lap !== car.lap) continue;
@@ -716,12 +734,15 @@ function enforceFollowingOrder(state: RaceState, before: RaceOrderSnapshot): voi
     // pneus. A inversão fantasma (sem vantagem) continua bloqueada.
     const gripEdge = tyreGrip(car.tyre, state.weather.rain) - tyreGrip(ahead.tyre, state.weather.rain);
     const paceEdge =
-      car.speed > ahead.speed * 1.001 ||
-      gripEdge > 0.004 ||
-      car.lapPace > ahead.lapPace + 0.003;
-    const sustainedEdge = car.paceAdvantageTicks >= (state.leaderLap === 0 ? 0 : 1);
+      car.speed > ahead.speed * 1.002 ||
+      gripEdge > 0.006;
+    const sustainedEdge = car.paceAdvantageTicks >= (state.leaderLap === 0 ? 0 : 2);
+    const yellowAffected = Boolean(yellowZoneFor(state, car, track) || yellowZoneFor(state, ahead, track));
     const pacePass =
+      !neutralized &&
+      !yellowAffected &&
       !attackingAhead &&
+      car.overtakeCooldown <= 0 &&
       car.distance > ahead.distance &&
       start < ahead.distance &&
       paceEdge &&
@@ -736,12 +757,12 @@ function enforceFollowingOrder(state: RaceState, before: RaceOrderSnapshot): voi
       // tentativas nem exige bateria. A ultrapassagem ainda é registrada.
       car.defendingUntil = Math.max(car.defendingUntil, state.elapsed + 1.0);
     }
-    const canCross = attackingAhead || pacePass;
+    const canCross = !neutralized && !yellowAffected && (attackingAhead || pacePass);
     let ceiling = canCross ? ahead.distance + 1.5 : ahead.distance - backoff;
     if (canCross) {
       // Não permite saltar dois carros no mesmo tick: o atacante ainda precisa
       // deixar espaço para o rival seguinte.
-      const nextAheadId = before.aheadId.get(aheadId);
+      const nextAheadId = before.physicalAheadId.get(aheadId);
       const nextAhead = nextAheadId ? state.cars.find((entry) => entry.driverId === nextAheadId) : undefined;
       if (nextAhead && nextAhead.status === "running" && nextAhead.pit.state === "none" && nextAhead.lap === car.lap) {
         ceiling = Math.min(ceiling, nextAhead.distance - backoff);
@@ -757,9 +778,10 @@ function enforceFollowingOrder(state: RaceState, before: RaceOrderSnapshot): voi
  * pista, na mesma volta e nenhum deles está no pit lane.
  */
 function resolveRacePasses(state: RaceState, before: RaceOrderSnapshot): void {
-  // Ultrapassar sob Safety Car/VSC é ilegal; nenhuma troca de posição deve
-  // virar evento oficial enquanto a pista não estiver verde.
-  if (state.trackStatus !== "green") return;
+  // Ultrapassar sob Safety Car/VSC, bandeira vermelha ou relargada é ilegal;
+  // nenhuma troca de posição vira evento oficial nesses períodos.
+  if (state.trackStatus !== "green" || state.elapsed < state.restartUntil) return;
+  const track = buildTrack(circuitStub(state));
   const afterRunning = state.cars
     .filter((car) => car.status === "running")
     .sort((a, b) => a.position - b.position);
@@ -786,6 +808,7 @@ function resolveRacePasses(state: RaceState, before: RaceOrderSnapshot): void {
         before.pit.get(passed.driverId);
       if (pitInvolved) continue;
       if (passer.lap !== passed.lap) continue;
+      if (yellowZoneFor(state, passer, track) || yellowZoneFor(state, passed, track)) continue;
       // A ordem já é protegida por enforceFollowingOrder; qualquer diferença
       // positiva de distância representa uma passagem real. O limiar antigo de
       // 0,5 m descartava ultrapassagens legítimas feitas no limite do tick.
@@ -794,7 +817,7 @@ function resolveRacePasses(state: RaceState, before: RaceOrderSnapshot): void {
       // adversário imediatamente à frente no início do tick. Isso evita que
       // carros "peguem carona" em uma disputa alheia e subam na ordem sem
       // disputar posição (passes fantasmas).
-      const expectedAhead = before.aheadId.get(passer.driverId);
+      const expectedAhead = before.physicalAheadId.get(passer.driverId);
       if (expectedAhead !== passed.driverId) continue;
 
       const passKind = passer.passKind ?? "attack";
@@ -815,13 +838,13 @@ function resolveRacePasses(state: RaceState, before: RaceOrderSnapshot): void {
       passEvent.counterAttack = counterAttack;
       // O carro passado pode responder, mas não no tick seguinte: a posição
       // precisa se estabilizar por alguns segundos antes de uma nova disputa.
-      passed.counterUntil = Math.max(passed.counterUntil, state.elapsed + 7.0);
-      passed.overtakeCooldown = Math.max(passed.overtakeCooldown, 2.5);
+      passed.counterUntil = Math.max(passed.counterUntil, state.elapsed + 8.0);
+      passed.overtakeCooldown = Math.max(passed.overtakeCooldown, 4.5);
       passed.defending = false;
       passed.defendTargetId = null;
       passed.defendStartedAt = null;
       passer.counterUntil = 0;
-      endAttack(passer, passKind === "attack" ? 4.0 : 3.0);
+      endAttack(passer, passKind === "attack" ? 4.0 : 4.5);
     }
   }
 }
@@ -835,6 +858,10 @@ function resolveAttacks(state: RaceState): void {
       continue;
     }
     if (car.status !== "running" || car.pit.state !== "none") {
+      endAttack(car, 1.0);
+      continue;
+    }
+    if (state.trackStatus !== "green" || state.elapsed < state.restartUntil) {
       endAttack(car, 1.0);
       continue;
     }
@@ -858,7 +885,7 @@ function resolveAttacks(state: RaceState): void {
   // depende de defesa, experiência, agressividade, pneus e posição.
   for (const car of state.cars) {
     const attacker = attackersByTarget.get(car.driverId) ?? null;
-    if (!attacker || state.trackStatus !== "green") {
+    if (!attacker || state.trackStatus !== "green" || state.elapsed < state.restartUntil) {
       car.defending = false;
       car.defendTargetId = null;
       car.defendStartedAt = null;
@@ -882,15 +909,25 @@ export function advanceRace(state: RaceState, dt = RACE_STEP_SECONDS): RaceEvent
   const before = state.events.length;
   const rng = createRng(state.seed, state.rngState);
   state.tick += 1;
-  state.elapsed += dt;
+  const redFlagSuspended = state.trackStatus === "red";
+  if (!redFlagSuspended) state.elapsed += dt;
 
   if (state.tick === 1) {
     state.startedAt = 0;
     addEvent(state, "info", "Luzes apagadas. Todos os carros em movimento.", undefined, "info");
   }
 
+  // Bandeira vermelha: a corrida fica suspensa. O relógio esportivo não anda,
+  // os carros não se movem e a ordem é preservada até a retomada.
+  if (redFlagSuspended) {
+    updateTrackStatus(state, dt);
+    state.rngState = rng.getState();
+    return state.events.slice(before);
+  }
+
   updateWeather(state, rng);
   updateTrackStatus(state, dt);
+  updateLocalYellows(state);
   const beforeOrder = captureRaceOrder(state);
 
   for (const car of state.cars) {
@@ -899,7 +936,7 @@ export function advanceRace(state: RaceState, dt = RACE_STEP_SECONDS): RaceEvent
     if (state.tick % 12 === 0) aiDecisions(state, car, rng);
   }
 
-  const runningOrder = orderCars(state.cars);
+  const runningOrder = orderCarsOnTrack(state.cars);
   const indexOf = new Map(runningOrder.map((c, i) => [c.driverId, i]));
   // A ordem do array de carros é estável e o gap é calculado antes de cada
   // atualização; isso mantém a janela de ataque coerente com o início do tick.
@@ -952,29 +989,133 @@ function updateWeather(state: RaceState, rng: ReturnType<typeof createRng>): voi
 }
 
 function updateTrackStatus(state: RaceState, _dt: number): void {
+  if (state.trackStatus === "red") {
+    state.redFlagTicks = Math.max(0, state.redFlagTicks - 1);
+    if (state.redFlagTicks === 0) {
+      state.trackStatus = "green";
+      state.restartUntil = state.elapsed + 4;
+      state.redFlagReason = null;
+      state.trackStatusUntil = 0;
+      state.trackStatusUntilLap = null;
+      for (const car of state.cars) {
+        car.attacking = false;
+        car.targetDriverId = null;
+        car.attackStartedAt = null;
+        car.attackLane = 0;
+        car.overtakeMode = false;
+        car.blueFlag = false;
+        car.speed = 0;
+      }
+      addEvent(state, "green", "Bandeira vermelha retirada. Relargada em 4 s.", undefined, "success");
+    }
+    return;
+  }
+
   const lapReached = state.trackStatusUntilLap != null && state.leaderLap >= state.trackStatusUntilLap;
   if (state.trackStatus === "sc" && (state.elapsed >= state.trackStatusUntil || lapReached)) {
     state.trackStatus = "green";
+    state.trackStatusUntil = 0;
     state.trackStatusUntilLap = null;
-    addEvent(state, "green", "Safety Car entra e a corrida é relançada.", undefined, "success");
+    state.restartUntil = state.elapsed + 3;
+    addEvent(state, "green", "Safety Car recolhido. Relargada em 3 s.", undefined, "success");
   } else if (state.trackStatus === "vsc" && (state.elapsed >= state.trackStatusUntil || lapReached)) {
     state.trackStatus = "green";
+    state.trackStatusUntil = 0;
     state.trackStatusUntilLap = null;
-    addEvent(state, "green", "VSC encerrado. Pista verde.", undefined, "success");
+    state.restartUntil = state.elapsed + 2;
+    addEvent(state, "green", "VSC encerrado. Relargada em 2 s.", undefined, "success");
+  } else if (state.trackStatus === "green" && state.restartUntil > 0 && state.elapsed >= state.restartUntil) {
+    state.restartUntil = 0;
+    addEvent(state, "green", "Relargada concluída. Pista verde.", undefined, "success");
   }
 }
 
-function deploySafetyCar(state: RaceState, full: boolean): void {
+export function deploySafetyCar(state: RaceState, full: boolean): void {
   if (state.trackStatus !== "green") return;
   const circuit = circuitStub(state);
   const laps = full ? 3 : 2;
   state.trackStatus = full ? "sc" : "vsc";
   state.trackStatusUntil = state.elapsed + laps * circuit.baseLapTime;
   state.trackStatusUntilLap = state.leaderLap + laps;
+  state.restartUntil = 0;
+  state.yellowZones = [];
   state.lastScLap = state.leaderLap;
   state.scLaps = 0;
   state.safetyCarDeployed += 1;
   addEvent(state, full ? "sc" : "vsc", full ? "ACIDENTE! Safety Car na pista." : "Virtual Safety Car decretado.", undefined, "danger");
+}
+
+export function deployRedFlag(state: RaceState, reason: string): void {
+  if (state.trackStatus === "red" || state.status === "finished") return;
+  state.trackStatus = "red";
+  state.redFlagTicks = 180 + (state.tick % 4) * 20;
+  state.redFlagReason = reason;
+  state.trackStatusUntil = 0;
+  state.trackStatusUntilLap = null;
+  state.restartUntil = 0;
+  state.yellowZones = [];
+  for (const car of state.cars) {
+    car.attacking = false;
+    car.targetDriverId = null;
+    car.attackStartedAt = null;
+    car.attackLane = 0;
+    car.overtakeMode = false;
+    car.blueFlag = false;
+    car.speed = 0;
+  }
+  addEvent(state, "red", `BANDEIRA VERMELHA: ${reason}. Corrida suspensa.`, undefined, "danger");
+}
+
+export function triggerLocalYellow(state: RaceState, car: RaceCar, cause: string, laps = 1): void {
+  if (state.trackStatus !== "green" || state.status !== "running" || car.pit.state !== "none") return;
+  const track = buildTrack(circuitStub(state));
+  const sector = sectorOf(track, car.distance);
+  const untilLap = state.leaderLap + Math.max(1, laps);
+  const existing = state.yellowZones.find((zone) => zone.sector === sector);
+  if (existing) {
+    existing.untilElapsed = Math.max(existing.untilElapsed, state.elapsed + 18);
+    existing.untilLap = Math.max(existing.untilLap, untilLap);
+    existing.cause = cause;
+    existing.driverId = car.driverId;
+    return;
+  }
+  state.yellowZones.push({
+    sector,
+    cause,
+    driverId: car.driverId,
+    untilElapsed: state.elapsed + 18,
+    untilLap,
+  });
+  addEvent(state, "yellow", `Amarela local no setor ${sector}: ${cause}.`, car.driverId, "warn", undefined, sector);
+}
+
+function updateLocalYellows(state: RaceState): void {
+  if (!state.yellowZones.length || state.trackStatus === "red") return;
+  const expired = state.yellowZones.filter((zone) => state.elapsed >= zone.untilElapsed || state.leaderLap >= zone.untilLap);
+  if (!expired.length) return;
+  state.yellowZones = state.yellowZones.filter((zone) => !expired.includes(zone));
+  for (const zone of expired) {
+    addEvent(state, "yellow", `Setor ${zone.sector} liberado. Pista verde na região.`, undefined, "success", undefined, zone.sector);
+  }
+}
+
+function yellowZoneFor(state: RaceState, car: RaceCar, track: TrackModel): LocalYellow | null {
+  if (!state.yellowZones.length) return null;
+  const sector = sectorOf(track, car.distance);
+  return state.yellowZones.find((zone) => zone.sector === sector) ?? null;
+}
+
+function hasBlueFlagPressure(state: RaceState, car: RaceCar): boolean {
+  if (car.lap >= state.leaderLap || car.status !== "running" || car.pit.state !== "none") return false;
+  return state.cars.some((other) =>
+    other !== car &&
+    other.status === "running" &&
+    other.pit.state === "none" &&
+    other.lap > car.lap &&
+    other.distance < car.distance &&
+    car.distance - other.distance < 80 &&
+    other.speed > car.speed * 0.9,
+  );
 }
 
 function effectivePaceFactor(state: RaceState, car: RaceCar): { base: number; corner: number; straight: number } {
@@ -998,6 +1139,14 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   const distanceInLap = wrapDistance(car.distance, lapLength);
   const pace = effectivePaceFactor(state, car);
   ensureLapPace(state, car);
+  const yellowZone = yellowZoneFor(state, car, track);
+  const wasBlue = car.blueFlag;
+  car.blueFlag = hasBlueFlagPressure(state, car);
+  if (car.blueFlag && !wasBlue) {
+    addEvent(state, "blue", `Bandeira azul para ${carName(state, car)}: carro mais rápido se aproximando.`, car.driverId, "warn");
+  }
+  if (yellowZone && car.attacking) endAttack(car, 1.0);
+  if (car.blueFlag && car.attacking) endAttack(car, 1.0);
 
   // --- pit stops ---
   let pitCap = Infinity;
@@ -1031,6 +1180,12 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
     if (distanceInLap >= track.length * PIT_SERVICE_FRACTION) {
       car.pit.state = "service";
       car.pit.serviceTime = PIT_SERVICE_BASE + (100 - team.pitCrew) * 0.011 + rng.range(0, 0.7);
+      if (car.damage > 0.04) {
+        const repaired = clamp(car.damage * (0.35 + team.pitCrew / 250), 0.04, 0.55);
+        car.damage = Math.max(0, car.damage - repaired);
+        car.pit.serviceTime += 2 + repaired * 10;
+        addEvent(state, "pit", `${carName(state, car)} recebe reparo de ${Math.round(repaired * 100)}% dos danos.`, car.driverId, "info");
+      }
       car.pit.timer = car.pit.serviceTime;
       car.pit.plannedLap = null;
       const target = availableCompound(car, car.nextCompound, state.weather.rain);
@@ -1072,7 +1227,16 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   const attemptGap = startPhase
     ? Math.max(7.0, Math.min(8.5, car.speed * 0.14))
     : Math.max(6.0, Math.min(7.2, car.speed * 0.12));
-  const overtakeRange = Boolean(aheadOnTrack && sameLap && gapToAhead > 0 && gapToAhead < Math.max(18, car.speed * 0.85) && state.trackStatus === "green");
+  const overtakeRange = Boolean(
+    aheadOnTrack &&
+    sameLap &&
+    gapToAhead > 0 &&
+    gapToAhead < Math.max(18, car.speed * 0.85) &&
+    state.trackStatus === "green" &&
+    !yellowZone &&
+    !car.blueFlag &&
+    state.elapsed >= state.restartUntil,
+  );
   const underAttack = state.cars.some((other) => other !== car && other.attacking && other.targetDriverId === car.driverId && Math.abs(other.distance - car.distance) < 25);
   const attackerNow = underAttack
     ? state.cars.find((other) => other !== car && other.attacking && other.targetDriverId === car.driverId) ?? null
@@ -1090,7 +1254,6 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   const pacePotential = ahead && aheadDriver
     ? (d.velocidade - aheadDriver.atributos.velocidade) * 0.00025 +
       (car.form - ahead.form) +
-      (car.lapPace - ahead.lapPace) * 0.7 +
       gripDelta * 0.6 +
       (car.pace === "attack" ? 0.003 : 0)
     : 0;
@@ -1152,6 +1315,9 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
     }
   } else if (
     state.trackStatus === "green" &&
+    state.elapsed >= state.restartUntil &&
+    !yellowZone &&
+    !car.blueFlag &&
     aheadOnTrack &&
     sameLap &&
     ahead &&
@@ -1270,7 +1436,7 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   factor *= 1 + (car.fuelStartKg - car.fuelKg) * 0.000038;
   const tyreG = tyreGrip(car.tyre, rain);
   factor *= tyreG;
-  factor *= 1 - car.damage * 0.07;
+  factor *= 1 - car.damage * 0.18;
   factor *= 1 + (d.chuva - 80) * 0.0015 * rain;
   if (state.elapsed < car.counterUntil) factor *= 1.0015;
   factor *= 1 + (1 - Math.abs(setup.downforce - circuit.downforceIdeal)) * 0.004;
@@ -1309,6 +1475,8 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   if (car.fuelKg <= 0.05) factor *= 0.93;
 
   let target = sample.speed * factor;
+  if (yellowZone) target *= 0.75;
+  if (car.blueFlag) target *= 0.97;
   // Largada: cada piloto reage em um instante próprio. Até lá o carro não é
   // empurrado por script; ele simplesmente ainda está parado.
   if (startPhase && state.elapsed < car.launchReaction) {
@@ -1319,9 +1487,16 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
     car.overtakeMode = false;
     if (state.trackStatus === "sc") {
       const gap = gapToAhead;
-      target = Math.min(target, gap > 80 ? 38 : gap > 40 ? 30 : gap > 15 ? 24 : 19);
+      // Safety Car: o líder mantém ritmo constante; o pelotão fecha de forma
+      // progressiva, sem ganhar posições.
+      const scTarget = !Number.isFinite(gap)
+        ? 22
+        : gap > 90 ? 32 : gap > 50 ? 27 : gap > 20 ? 23 : 20;
+      target = Math.min(target, scTarget);
+    } else if (state.trackStatus === "vsc") {
+      target = Math.min(target, sample.speed * 0.75);
     } else {
-      target = Math.min(target, sample.speed * 0.82);
+      target = 0;
     }
   }
   if (car.attacking) {
@@ -1331,6 +1506,9 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   }
   if (car.pit.state !== "none") {
     target = Math.min(target, pitCap);
+  } else if (car.blueFlag) {
+    // Facilita a passagem sem sair da pista nem perder a posição por script.
+    car.lane = clamp(car.lane + dt * 0.9, 0, 0.35);
   } else if (!car.attacking && defendingNow && attackerNow && car.energy > 12) {
     // Defesa ativa: cobre o lado por onde o atacante está tentando passar.
     const attackerLane = clamp(attackerNow.lane + attackerNow.attackLane, 0, 1);
@@ -1389,6 +1567,7 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
   car.tyre.temp = updateTyreTemperature(car.tyre, car.pace, car.tyreMode, car.speed, state.weather.airTemp, state.weather.trackTemp, rain, dt);
   if (car.tyre.wear > 86 && !car.tyre.punctured && rng.chance(0.000012 * (car.tyre.wear - 86))) {
     car.tyre.punctured = true;
+    triggerLocalYellow(state, car, "Pneu furado", 1);
     addEvent(state, "incident", `Pneu furado para ${carName(state, car)}!`, car.driverId, "danger");
   }
 
@@ -1451,12 +1630,31 @@ function updateCar(state: RaceState, car: RaceCar, ahead: RaceCar | null, dt: nu
     state.trackStatus === "green" &&
     rng.chance(0.006)
   ) {
-    car.damage = Math.min(1, car.damage + 0.18);
-    ahead!.damage = Math.min(1, ahead!.damage + 0.1);
+    const relative = Math.max(0, car.speed - ahead!.speed);
+    const severity = clamp(
+      0.035 + relative * 0.012 + car.tyre.wear / 700 + Math.max(0, d.agressividade - 50) / 600,
+      0.03,
+      0.35,
+    );
+    car.damage = Math.min(1, car.damage + severity);
+    ahead!.damage = Math.min(1, ahead!.damage + severity * 0.65);
     car.contactWarnings += 1;
-    car.penalties += 5;
-    car.penaltyNotes.push("Contato com rival (+5s)");
-    addEvent(state, "penalty", `Contato entre ${carName(state, car)} e ${carName(state, ahead!)}. Penalidade de 5s.`, car.driverId, "warn");
+    if (severity >= 0.14 || car.contactWarnings >= 2) {
+      car.penalties += 5;
+      car.penaltyNotes.push("Contato com rival (+5s)");
+      addEvent(state, "penalty", `Contato entre ${carName(state, car)} e ${carName(state, ahead!)}. Penalidade de 5s.`, car.driverId, "warn");
+    } else {
+      addEvent(state, "incident", `Toque leve entre ${carName(state, car)} e ${carName(state, ahead!)}; sem penalidade.`, car.driverId, "warn");
+    }
+    if (severity >= 0.08) triggerLocalYellow(state, car, "Contato entre carros", 1);
+    if (car.damage >= 0.95 && rng.chance(0.35)) {
+      car.status = "retired";
+      car.retiredReason = "Danos por contato";
+      car.speed = 0;
+      addEvent(state, "retirement", `${carName(state, car)} abandona com danos graves após contato.`, car.driverId, "danger");
+      if (rng.chance(0.04)) deployRedFlag(state, "Contato com danos graves");
+      else if (rng.chance(0.65)) deploySafetyCar(state, true);
+    }
   }
 
   car.tyre.wear = clamp(car.tyre.wear, 0, 100);
@@ -1489,27 +1687,41 @@ function rollIncidents(state: RaceState, car: RaceCar, rng: ReturnType<typeof cr
     0.000011 *
     (1 + (100 - d.consistencia) / 65) *
     (1 + (100 - d.experiencia) / 180) *
+    (1 + Math.max(0, d.velocidade - 70) / 350) *
     (1 + car.tyre.wear / 150) *
     (1 + rain * 1.1) *
     (1 + d.agressividade / 320) *
+    (state.trackStatus === "green" ? 1 : 0.4) *
     battle;
   if (rng.chance(base)) {
     const roll = rng.next();
     car.incidents += 1;
     if (roll < 0.1) {
-      // acidente grave
+      // acidente grave: dano terminal, amarela local e possível neutralização
+      car.damage = 1;
       car.status = "retired";
       car.retiredReason = "Acidente";
       car.speed = 0;
       addEvent(state, "retirement", `${carName(state, car)} abandona após acidente.`, car.driverId, "danger");
-      if (state.trackStatus === "green" && rng.chance(0.8)) deploySafetyCar(state, true);
+      triggerLocalYellow(state, car, "Acidente grave", 2);
+      if (state.trackStatus === "green") {
+        if (rng.chance(0.04)) deployRedFlag(state, "Acidente grave");
+        else if (rng.chance(0.8)) deploySafetyCar(state, true);
+      }
     } else if (roll < 0.22) {
-      car.damage = Math.min(1, car.damage + rng.range(0.12, 0.3));
+      const damage = rng.range(0.12, 0.32);
+      car.damage = Math.min(1, car.damage + damage);
       car.speed *= 0.6;
+      triggerLocalYellow(state, car, "Batida na barreira", 1);
       addEvent(state, "incident", `${carName(state, car)} toca no muro e danifica o carro.`, car.driverId, "danger");
+      if (damage > 0.2 && state.trackStatus === "green" && rng.chance(0.15)) deploySafetyCar(state, false);
     } else if (roll < 0.55) {
+      car.damage = Math.min(1, car.damage + rng.range(0.02, 0.1));
       car.speed = Math.min(car.speed, 8);
       car.attacking = false;
+      // Uma saída simples nem sempre exige amarela; só quando há dano ou o
+      // carro permanece em local de risco.
+      if (car.damage > 0.05 || rng.chance(0.35)) triggerLocalYellow(state, car, "Saída de pista", 1);
       addEvent(state, "incident", `${carName(state, car)} sai da pista e perde tempo.`, car.driverId, "warn");
     } else {
       car.dangerousWarnings += 1;
@@ -1518,15 +1730,24 @@ function rollIncidents(state: RaceState, car: RaceCar, rng: ReturnType<typeof cr
       addEvent(state, "penalty", `${carName(state, car)} recebe 5s por manobra perigosa.`, car.driverId, "warn");
     }
   }
-  // falha mecânica
+  // falha mecânica: pode ser reparável ou terminal, sem aumentar a frequência
   const team = teamOf(state, car.teamId)!;
   const reliability = team.car.confiabilidade;
   if (rng.chance(0.00000085 * (1 + (100 - reliability) / 34))) {
-    car.status = "retired";
-    car.retiredReason = rng.chance(0.5) ? "Falha de motor" : "Falha mecânica";
-    car.speed = 0;
-    addEvent(state, "retirement", `${carName(state, car)} para com ${car.retiredReason!.toLowerCase()}.`, car.driverId, "danger");
-    if (rng.chance(0.25) && state.trackStatus === "green") deploySafetyCar(state, false);
+    const terminal = rng.chance(0.35);
+    car.damage = Math.min(1, car.damage + rng.range(0.15, 0.45));
+    if (terminal || car.damage >= 0.92) {
+      car.status = "retired";
+      car.retiredReason = rng.chance(0.5) ? "Falha de motor" : "Falha mecânica";
+      car.speed = 0;
+      addEvent(state, "retirement", `${carName(state, car)} para com ${car.retiredReason!.toLowerCase()}.`, car.driverId, "danger");
+      triggerLocalYellow(state, car, "Carro parado na pista", 1);
+      if (rng.chance(0.25) && state.trackStatus === "green") deploySafetyCar(state, false);
+    } else {
+      car.speed *= 0.85;
+      addEvent(state, "incident", `${carName(state, car)} tem problema mecânico e perde ritmo.`, car.driverId, "warn");
+      if (state.trackStatus === "green" && rng.chance(0.15)) deploySafetyCar(state, false);
+    }
   }
 }
 
@@ -1695,8 +1916,18 @@ function orderCars(cars: RaceCar[]): RaceCar[] {
     const br = b.status === "retired";
     if (ar && !br) return 1;
     if (!ar && br) return -1;
+    // Classificação: voltas primeiro; carros atrasados ficam atrás mesmo que
+    // estejam fisicamente à frente do líder na pista.
+    if (a.lap !== b.lap) return b.lap - a.lap;
     return b.distance - a.distance;
   });
+}
+
+/** Ordem física exclusiva para movimento, clamp e disputas em pista. */
+function orderCarsOnTrack(cars: RaceCar[]): RaceCar[] {
+  return cars
+    .filter((car) => car.status === "running")
+    .sort((a, b) => b.distance - a.distance);
 }
 
 export function updatePositions(state: RaceState): void {
@@ -1835,6 +2066,9 @@ export function buildRaceView(state: RaceState, visibleTeams: string[] = state.p
     status: state.status,
     trackStatus: state.trackStatus,
     trackStatusUntilLap: state.trackStatusUntilLap,
+    yellowSectors: state.yellowZones.map((zone) => ({ sector: zone.sector, cause: zone.cause, untilLap: zone.untilLap })),
+    redFlagReason: state.redFlagReason,
+    restartUntil: state.restartUntil,
     weather: state.weather,
     cars: ordered.map((car) => {
       const isVisible = visible.has(car.teamId);
@@ -1898,6 +2132,7 @@ export function buildRaceView(state: RaceState, visibleTeams: string[] = state.p
         penalty: car.penalties,
         penaltyNotes: car.penaltyNotes,
         trackLimitWarnings: car.trackLimitWarnings,
+        blueFlag: car.blueFlag,
         damage: car.damage,
         stops: car.pit.stops,
         overtakeMode: car.overtakeMode,

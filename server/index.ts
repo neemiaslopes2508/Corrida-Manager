@@ -719,7 +719,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   if (url.pathname === "/api/health") {
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, version: "1.3.6B", time: new Date().toISOString() }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, version: "1.3.6C", time: new Date().toISOString() }));
     return;
   }
   if (url.pathname === "/api/rooms") {
