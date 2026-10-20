@@ -12,6 +12,7 @@
     "dev:web": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc --noEmit && vite build",
+    "build:pages": "node scripts/build-pages.mjs",
     "start": "tsx server/index.ts",
     "host": "npm run build && npm run start",
     "online": "npm run build && node scripts/online.mjs",

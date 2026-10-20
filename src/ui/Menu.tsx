@@ -8,6 +8,7 @@ import { CountryFlag } from "./Visuals";
 export function MenuScreen({
   saves,
   rooms,
+  multiplayerAvailable = true,
   onSolo,
   onMultiplayer,
   onLoad,
@@ -16,6 +17,7 @@ export function MenuScreen({
 }: {
   saves: CareerSummary[];
   rooms: { code: string; players: number; phase: string; careerPhase?: string | null }[];
+  multiplayerAvailable?: boolean;
   onSolo: () => void;
   onMultiplayer: () => void;
   onLoad: (id: string) => void;
@@ -39,7 +41,7 @@ export function MenuScreen({
               Nova carreira solo
             </Button>
             <Button variant="success" onClick={onMultiplayer}>
-              Multiplayer · 3 jogadores
+              {multiplayerAvailable ? "Multiplayer · 3 jogadores" : "Multiplayer · requer servidor"}
             </Button>
             <Button variant="ghost" onClick={() => setTab("load")}>
               Carregar carreira
@@ -48,6 +50,11 @@ export function MenuScreen({
               Como jogar
             </Button>
           </div>
+          {!multiplayerAvailable && (
+            <p className="muted small">
+              Build estático do GitHub Pages: o modo solo roda no navegador. O multiplayer exige o servidor Node/WebSocket local ou online.
+            </p>
+          )}
         </div>
         <div className="hero-stats">
           <div><strong>11</strong><span>equipes oficiais 2026</span></div>
@@ -77,29 +84,38 @@ export function MenuScreen({
             ))}
           </div>
           <div className="divider" />
-          <div className="row-between">
-            <h3>Salas no servidor</h3>
-            <Button variant="ghost" onClick={onRefreshRooms}>Atualizar</Button>
-          </div>
-          {rooms.length === 0 && (
+          {multiplayerAvailable ? (
+            <>
+              <div className="row-between">
+                <h3>Salas no servidor</h3>
+                <Button variant="ghost" onClick={onRefreshRooms}>Atualizar</Button>
+              </div>
+              {rooms.length === 0 && (
+                <p className="muted">
+                  A listagem pública de salas fica desativada por segurança. Entre usando o código compartilhado pelo host.
+                  Em LAN, o host pode definir <code>CM_EXPOSE_ROOMS=1</code> para habilitar a lista.
+                </p>
+              )}
+              <div className="save-list">
+                {rooms.map((room) => (
+                  <div className="save-row" key={room.code}>
+                    <div>
+                      <strong>Sala {room.code}</strong>
+                      <span className="muted">{room.players} jogador(es) · {room.phase === "career" ? `carreira (${room.careerPhase ?? "em andamento"})` : "lobby"}</span>
+                    </div>
+                    <Button variant="subtle" onClick={() => onReconnect(room.code)}>
+                      Entrar / reconectar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
             <p className="muted">
-              A listagem pública de salas fica desativada por segurança. Entre usando o código compartilhado pelo host.
-              Em LAN, o host pode definir <code>CM_EXPOSE_ROOMS=1</code> para habilitar a lista.
+              Este build estático do GitHub Pages é somente solo. As carreiras salvas acima continuam no navegador.
+              Para multiplayer, rode o servidor local ou use um servidor externo configurado no build.
             </p>
           )}
-          <div className="save-list">
-            {rooms.map((room) => (
-              <div className="save-row" key={room.code}>
-                <div>
-                  <strong>Sala {room.code}</strong>
-                  <span className="muted">{room.players} jogador(es) · {room.phase === "career" ? `carreira (${room.careerPhase ?? "em andamento"})` : "lobby"}</span>
-                </div>
-                <Button variant="subtle" onClick={() => onReconnect(room.code)}>
-                  Entrar / reconectar
-                </Button>
-              </div>
-            ))}
-          </div>
         </Panel>
       )}
 
@@ -141,6 +157,7 @@ export function MenuScreen({
                 <li>Crie a sala, envie o código e cada jogador escolhe uma equipe diferente.</li>
                 <li>Todos marcam “Pronto”; o host inicia. Só o host avança sessões, pausa e velocidade.</li>
                 <li>Na mesma rede, <code>npm start</code> e o endereço LAN também funcionam. Para internet, use o link do Quick Tunnel.</li>
+                {!multiplayerAvailable && <li>No GitHub Pages, esta build é somente solo; o navegador não executa o servidor WebSocket.</li>}
               </ul>
             </div>
           </div>

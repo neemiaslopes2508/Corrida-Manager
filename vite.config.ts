@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // O padrão continua "/" para o servidor local. O workflow do GitHub Pages
+  // define VITE_BASE="./" para funcionar em /NOME-DO-REPOSITORIO/.
+  base: process.env.VITE_BASE ?? "/",
   server: {
     port: 5173,
     host: "0.0.0.0",

@@ -6,6 +6,7 @@ import { applySessionResult, completeQualifyingSession, createCareer, makeRaceFo
 import { dispatchCareerAction } from "./engine/actions";
 import { createRaceState } from "./engine/race";
 import { MPClient } from "./net/client";
+import { apiUrl, MULTIPLAYER_AVAILABLE } from "./net/config";
 import { MenuScreen, TeamSelectScreen } from "./ui/Menu";
 import { MultiplayerHome } from "./ui/Lobby";
 import { Dashboard } from "./ui/Dashboard";
@@ -64,8 +65,12 @@ export function App() {
   const notify = (text: string, tone: "info" | "error" | "success" = "info") => setToast({ text, tone });
 
   async function refreshRooms() {
+    if (!MULTIPLAYER_AVAILABLE) {
+      setRooms([]);
+      return;
+    }
     try {
-      const res = await fetch("/api/rooms");
+      const res = await fetch(apiUrl("/api/rooms"));
       if (!res.ok) return;
       const list = (await res.json()) as RoomSummary[];
       setRooms(list.filter((r) => r.phase === "career" || r.players > 0));
@@ -332,6 +337,13 @@ export function App() {
   }
 
   function openMultiplayer() {
+    if (!MULTIPLAYER_AVAILABLE) {
+      notify(
+        "Esta versão é estática (GitHub Pages) e roda apenas o modo solo. O multiplayer precisa do servidor Node/WebSocket.",
+        "info",
+      );
+      return;
+    }
     setScreen("multi");
     setMode("multi");
     setMultiError(null);
@@ -394,6 +406,7 @@ export function App() {
       <MenuScreen
         saves={saves}
         rooms={rooms}
+        multiplayerAvailable={MULTIPLAYER_AVAILABLE}
         onSolo={() => setScreen("select")}
         onMultiplayer={openMultiplayer}
         onLoad={loadCareer}

@@ -74,6 +74,7 @@ Atualizado em 2026-10-19.
 - V1.3.6C: holdout (6 seeds): 31,3/26,7/30,2 passes em média (medianas 21/23,5/28,5; um evento atípico de 80 passes em corrida com 3 abandonos e 2 Safety Cars), 5,3–6,3 amarelas, 0,3–1,2 SC, 0–0,3 VSC e 0–0,2 vermelha por corrida; nenhum passe sob bandeira.
 - V1.3.6C: `typecheck`, 85 testes, build, `check:media` e `/api/health` 1.3.6C aprovados; versão `1.3.6-c` no `package.json` (semver) e identificação `V1.3.6C` no servidor e documentação.
 - V1.3.6C: simplificações documentadas: bandeira vermelha sem intervenção/troca de pneus e com relargada parada a partir das posições; amarela local proíbe qualquer passe na zona, sem exceções para carro parado; bandeiras azuis dependem de retardatários efetivos.
+- V1.3.6C — GitHub Pages: `npm run build:pages` gera build relativo (`VITE_BASE=./`) e `VITE_STATIC_SOLO=true`; o workflow `.github/workflows/deploy-pages.yml` publica em GitHub Pages. O modo solo roda inteiramente no navegador, com saves em `localStorage`; o multiplayer exige servidor Node/WebSocket e é desabilitado com aviso no build estático. O `index.html` e a mídia usam caminhos relativos, validados em subdiretório `/Corrida-Manager/`.
 - Carreira solo completa (Austrália, China com Sprint, Japão) via UI, com campeões.
 - Corrida ao vivo com mapa SVG, marcadores, torre, telemetria, estratégia e feed.
 - Pit stops, compostos, penalidades, Safety Car e clima em execução.

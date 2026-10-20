@@ -32,6 +32,32 @@ npm start
 
 Em desenvolvimento, abra `http://localhost:5173`. Em produção/host, abra `http://localhost:8787`.
 
+## GitHub Pages — modo solo
+
+O projeto tem um workflow em `.github/workflows/deploy-pages.yml`. Para publicar:
+
+1. No GitHub, abra **Settings → Pages** e selecione **Source: GitHub Actions**.
+2. Envie a branch `main` ou execute o workflow **Deploy GitHub Pages** manualmente.
+3. O jogo ficará em `https://SEU-USUARIO.github.io/Corrida-Manager/`.
+
+O build do Pages usa `VITE_BASE=./` e `VITE_STATIC_SOLO=true`. Nesse modo:
+
+- carreira, treino, classificação e corrida solo rodam inteiramente no navegador;
+- os saves continuam no `localStorage` daquele navegador;
+- o lobby multiplayer é desabilitado com uma mensagem clara, porque o GitHub Pages não executa Node.js nem WebSocket.
+
+Para gerar o mesmo build localmente:
+
+```bash
+npm run build:pages
+```
+
+Depois sirva a pasta `dist/` em qualquer servidor estático. O `index.html` usa caminhos relativos (`./assets`, `./local-media`), então funciona tanto na raiz quanto em subdiretórios.
+
+Se quiser multiplayer com o cliente publicado no Pages, é necessário um servidor externo Node/WebSocket. Gere o build com `VITE_WS_URL` e `VITE_API_URL` apontando para ele e inclua a origem do Pages em `ALLOWED_ORIGINS`/`PUBLIC_URL` no servidor. Sem isso, a versão do Pages é somente solo.
+
+> A pasta `public/local-media` contém material de uso local descrito em `docs/MEDIA.md`. Confirme a autorização de publicação antes de tornar o repositório/site público.
+
 > **Diretório oficial:** `C:\Projetos\CorridaManager`. Abra o terminal e o OpenCode nessa pasta. Artefatos de navegador/Playwright são gravados em `.playwright-mcp/` relativo ao diretório da sessão; veja `docs/CONSOLIDACAO_DIRETORIOS.md`.
 
 Para jogar com amigos pela internet, use o atalho:
@@ -61,6 +87,7 @@ Scripts:
 | `npm run dev:web` | apenas cliente Vite |
 | `npm run dev:server` | apenas servidor Node/WS com reload |
 | `npm run build` | checagem TypeScript + build do cliente em `dist/` |
+| `npm run build:pages` | build estático para GitHub Pages (`VITE_BASE=./`, modo solo) |
 | `npm start` | serve o build e o WebSocket na porta 8787 |
 | `npm run host` | build + start (recomendado para jogar em LAN) |
 | `npm run online` | build + host + Cloudflare Quick Tunnel com link público HTTPS/WSS |
